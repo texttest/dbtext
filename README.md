@@ -1,5 +1,6 @@
 # dbtext
-Utility for storing a database as a directory of plain text files, and reading from those text files
+Utility for storing a database as a directory of plain text files, and reading from those text files.
+Currently works only on MSSQL server (localdb) but much of the code is generic and could be adapted for other databases.
 
 ## usage
 
