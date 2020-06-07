@@ -6,15 +6,18 @@ Currently works only on MSSQL server (localdb) but much of the code is generic a
 
 First, dump your test database to this format:
 
+```python
     with pyodbc.connect(connStr) as conn:
         with dbtext.DBText("dump", conn) as testdb: # the name "dump" doesn't matter, just a temporary name
             testdb.write_data("db_tables", use_master_connection=True) # creates a directory called db_tables
     
+```
 
 Then you create tests, probably with TextTest, that use this directory as test data ("copy_test_path")
 
 A test harness script might do something like:
 
+```python
     import dbtext, os
     testdbname = "ttdb_" + str(os.getpid()) # some temporary name not to clash with other tests
     with dbtext.DBText(testdbname) as db: # the name you use here will be used for the directory name in the current working directory
@@ -29,3 +32,4 @@ A test harness script might do something like:
         # do whatever it is the test does
 
         db.dumptables("myext", "*") # dump changes in all the tables you're interested in. "myext" is whatever extension you want to use, probably the TextTest one 
+```
