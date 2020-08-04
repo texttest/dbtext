@@ -34,7 +34,7 @@ class DBText:
             print("Unexpected error for db " + database + ":", e)
             raise
 
-    def create(self, mdffile=None, sqlfile=None, sqlFileWithoutGo=False):
+    def create(self, mdffile=None, sqlfile=None):
         localdbFolder = os.getenv("TEXTTEST_SANDBOX")
         attachsql = "CREATE DATABASE " + self.database_name
         if mdffile:
@@ -50,7 +50,7 @@ class DBText:
             self.iscreated = True
             with self.make_connection(self.database_name) as ttcxn:
                 if sqlfile and os.path.isfile(sqlfile):
-                    self.read_sql_file(ttcxn, sqlfile, sqlFileWithoutGo)
+                    self.read_sql_file(ttcxn, sqlfile)
                 
                 tables_dir_name = self.get_tables_dir_name()
                 if os.path.isdir(tables_dir_name):
@@ -68,7 +68,7 @@ class DBText:
             print("Failed to execute query:\n" + repr(currQuery))
             raise
             
-    def read_sql_file(self, ttcxn, sqlfile, sqlFileWithoutGo=False):
+    def read_sql_file(self, ttcxn, sqlfile):
         currQuery = ''
         inComment = False
         with open(sqlfile) as f:
@@ -89,9 +89,9 @@ class DBText:
                         currQuery = ''
                 else:
                     if currQuery:
-                        currQuery += " "
+                        currQuery += "\n"
                     currQuery += line
-        if sqlFileWithoutGo and currQuery:
+        if currQuery.strip():
             self.execute_setup_query(ttcxn, currQuery)
 
     def read_tables_dir(self, ttcxn, tables_dir_name):
@@ -151,31 +151,20 @@ class DBText:
     @classmethod
     def package_blobs(cls, blobs, *args):
         return blobs[0]
-    
-    @classmethod
-    def get_blob_number(cls, f):
-        return 1 # assume only one per key in general
-    
-    @classmethod
-    def find_blob_files(cls, blobPrefix, tablesDir):
-        blobFiles = glob(os.path.join(tablesDir, blobPrefix + "*"))
-        blobFiles.sort(key=cls.get_blob_number)
-        return blobFiles
-
-    @classmethod                
-    def make_blob(cls, blobPrefix, tablesDir):
-        blobFiles = cls.find_blob_files(blobPrefix, tablesDir)
-        if len(blobFiles) == 0:
-            sys.stderr.write("ERROR: Could not find any blob files for prefix " + blobPrefix + "!\n")
         
+    @classmethod                
+    def make_blob(cls, blobFiles, blobType):
         blobs = [ open(fn, "rb").read() for fn in blobFiles ]
-        blob_bytes = cls.package_blobs(blobs, blobPrefix)
+        blob_bytes = cls.package_blobs(blobs, blobType)
         return pyodbc.Binary(blob_bytes)
 
     def parse_blob(self, currRowDict, tablesDir):
-        blobFileName = self.get_blob_file_name(currRowDict, self.get_blob_patterns())
-        blobPrefix = blobFileName.split(".")[0]
-        return self.make_blob(blobPrefix, tablesDir)
+        blobFileName, blobType = self.get_blob_file_name(currRowDict, self.get_blob_patterns())
+        blobPath = os.path.join(tablesDir, blobFileName)
+        if not os.path.isfile(blobPath):
+            sys.stderr.write("ERROR: Could not find any blob files named " + blobFileName + "!\n")
+            return pyodbc.Binary(b"")
+        return self.make_blob([ blobPath ], blobType)
                     
     def parse_row_value(self, value, currRowDict, tablesDir):
         if value == "None":
@@ -377,7 +366,7 @@ class DBText:
         # Column ordering can vary a lot, depending on how the db was created. We always show the columns in a standard order
         # The IDs come at the top, with other stuff sorted alphabetically
         name = coldata[0]
-        if name.endswith("_id"):
+        if name.endswith("_id") or name == "id":
             return "000" + name
         elif name.endswith("_image"):
             return "zzz" + name
@@ -586,7 +575,10 @@ class DBText:
         for blob_pattern in blob_patterns:
             fn = Template(blob_pattern).safe_substitute(fileNameData)
             if "$" not in fn:
-                return fn
+                return fn, os.path.dirname(blob_pattern)
+            
+        sys.stderr.write("Failed to find blob given patterns " + repr(blob_patterns) + " and " + repr(fileNameData) + "\n")
+        return None, None
 
     def dumpblobs(self, blobs, blob_patterns, row, column_names):
         class FileNameData:
@@ -598,7 +590,7 @@ class DBText:
             
         fileNameData = FileNameData()
         for b in blobs:
-            blobFileName = self.get_blob_file_name(fileNameData, blob_patterns)
+            blobFileName, _ = self.get_blob_file_name(fileNameData, blob_patterns)
             if blobFileName:
                 with open(blobFileName, "wb") as f:
                     f.write(b)
