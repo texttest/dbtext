@@ -42,8 +42,9 @@ class DBText:
         elif localdbFolder:
             if os.name == "nt":
                 localdbFolder = localdbFolder.replace('/','\\')
-            tmpDbFileName = os.path.join(localdbFolder, self.database_name + ".mdf")
-            attachsql += " ON (NAME = '" + self.database_name + "', FILENAME='" + tmpDbFileName + "')"
+            if False: # only needed on sqlserver
+                tmpDbFileName = os.path.join(localdbFolder, self.database_name + ".mdf")
+                attachsql += " ON (NAME = '" + self.database_name + "', FILENAME='" + tmpDbFileName + "')"
         attachsql += ";" 
         try:
             self.query(attachsql)
@@ -57,8 +58,8 @@ class DBText:
                     self.read_tables_dir(ttcxn, tables_dir_name)
 
                 self.readrv(ttcxn)
-        except pyodbc.DatabaseError as e:
-            print("Unexpected error for create db " + self.database_name + ":", e)
+        except (pyodbc.Error, pyodbc.ProgrammingError) as e:
+            print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
             raise
         
     def execute_setup_query(self, ttcxn, currQuery):
@@ -191,7 +192,9 @@ class DBText:
             return
         
         valueStr = ("?," * len(data))[:-1]
-        sql = "INSERT [dbo].[" + table_name + "] ([" + "], [".join(data.keys()) + "]) VALUES (" + valueStr + ")"
+        #sql = "INSERT [dbo].[" + table_name + "] ([" + "], [".join(data.keys()) + "]) VALUES (" + valueStr + ")"
+        keys = ", ".join(data.keys())
+        sql = f"INSERT INTO {table_name} ({keys}) VALUES ({valueStr})"
         if identity_insert:
             sql = "SET IDENTITY_INSERT [" + table_name + "] ON; " + sql + "; SET IDENTITY_INSERT [" + table_name + "] OFF"  
         try:
@@ -222,10 +225,12 @@ class DBText:
         return self.cursor().execute(s)
 
     def single(self):
-        self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+        #self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+        pass
 
     def multi(self):
-        self.query("ALTER DATABASE " + self.database_name + " SET MULTI_USER")
+        #self.query("ALTER DATABASE " + self.database_name + " SET MULTI_USER")
+        pass
 
     def query_single(self, q):
         try:
@@ -247,7 +252,7 @@ class DBText:
         if self.iscreated:
             try:
                 ##print "Removing database: " + self.database_name
-                self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE;")
+                self.single()
             except pyodbc.DatabaseError as e:
                 print("Unexpected error for alter db " + self.database_name + ":", e)
             try:
@@ -261,10 +266,13 @@ class DBText:
     def get_driver(cls):
         odbc, legacy = [], []
         for driver in pyodbc.drivers():
+            print(driver)
             if driver.startswith("ODBC Driver"):
                 odbc.append(driver)
             elif driver.startswith("SQL Server"):
                 legacy.append(driver)
+            elif driver.startswith("MySQL"):
+                odbc.append(driver)
 
         if odbc:
             return max(odbc)
@@ -291,8 +299,11 @@ class DBText:
     @classmethod
     def make_connection_string_template(cls):
         driver = cls.get_driver()
-        server = cls.get_localdb_server()
-        return 'DRIVER={' + driver + '};SERVER=(localdb)\\' + server + ';Integrated Security=true;DATABASE=%s;'
+        if driver == "MySQL":
+            server = "localhost;USER=root;OPTION=3"
+        else:
+            server = f"(localdb)\\{cls.get_localdb_server()};Integrated Security=true"
+        return 'DRIVER={' + driver + '};SERVER=' + server +';DATABASE=%s;'
     
     def get_connection_string(self, driver=True):
         connstr = self.connectionStringTemplate % self.database_name
@@ -308,8 +319,9 @@ class DBText:
         return pyodbc.connect(connstr, autocommit=True)
             
     def readrv(self, ttcxn):
-        rows = ttcxn.cursor().execute('select master.sys.fn_varbintohexstr(@@DBTS) AS maxrv').fetchall()
-        self.startrv = rows[0].maxrv
+        #rows = ttcxn.cursor().execute('select master.sys.fn_varbintohexstr(@@DBTS) AS maxrv').fetchall()
+        #self.startrv = rows[0].maxrv
+        pass
         
     def readmax(self):
         if 'TEXTTEST_DUMPTABLES' not in os.environ:
@@ -543,7 +555,7 @@ class DBText:
                 # Table has no rv, dump the constraint and assume the whole table is relevant
                 return self.extract_data_for_dump(ttcxn, tablespec)
             else:
-                sys.stderr.write("ERROR: could not write table(s) " + repr(tablespec) + " due to problems with query:\n")
+                sys.stderr.write(f"ERROR: could not write table(s) {tablespec} due to problems with query:\n{sqltext}\n")
                 sys.stderr.write(str(e) + "\n")
                 return [], colnames
         
