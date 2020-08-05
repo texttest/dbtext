@@ -30,7 +30,7 @@ class DBText:
         try:
             self.cnxn = master_connection or self.make_connection("master")
             self.isconnected = True
-        except pyodbc.DatabaseError as e:
+        except pyodbc.Error as e:
             print("Unexpected error for db " + database + ":", e)
             raise
 
@@ -57,8 +57,8 @@ class DBText:
                     self.read_tables_dir(ttcxn, tables_dir_name)
 
                 self.readrv(ttcxn)
-        except pyodbc.DatabaseError as e:
-            print("Unexpected error for create db " + self.database_name + ":", e)
+        except pyodbc.Error as e:
+            print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
             raise
         
     def execute_setup_query(self, ttcxn, currQuery):
@@ -191,9 +191,12 @@ class DBText:
             return
         
         valueStr = ("?," * len(data))[:-1]
-        sql = "INSERT [dbo].[" + table_name + "] ([" + "], [".join(data.keys()) + "]) VALUES (" + valueStr + ")"
+        keys = ", ".join([ self.quote(k) for k in data.keys() ])
+        quoted_table = self.quote(table_name)
+        sql = f"INSERT INTO {quoted_table} ({keys}) VALUES ({valueStr})"
+        
         if identity_insert:
-            sql = "SET IDENTITY_INSERT [" + table_name + "] ON; " + sql + "; SET IDENTITY_INSERT [" + table_name + "] OFF"  
+            sql = "SET IDENTITY_INSERT " + quoted_table + " ON; " + sql + "; SET IDENTITY_INSERT " + quoted_table + " OFF"  
         try:
             ttcxn.cursor().execute(sql, *list(data.values()))
         except pyodbc.DatabaseError as e:
@@ -211,7 +214,7 @@ class DBText:
         try:
             with self.make_connection(self.database_name) as ttcxn:
                 self.readrv(ttcxn)
-        except pyodbc.DatabaseError as e:
+        except pyodbc.Error as e:
             print("Unexpected error for update rv " + self.database_name + ":", e)
             pass
     
@@ -230,7 +233,7 @@ class DBText:
     def query_single(self, q):
         try:
             self.single()
-        except:
+        except pyodbc.Error:
             print("Failed to go into single user mode.")
         try:
             self.query(q)
@@ -245,16 +248,11 @@ class DBText:
 
     def drop(self):
         if self.iscreated:
+            self.single()
             try:
-                ##print "Removing database: " + self.database_name
-                self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE;")
-            except pyodbc.DatabaseError as e:
-                print("Unexpected error for alter db " + self.database_name + ":", e)
-            try:
-                ##self.query("EXEC sp_detach_db '" + self.database_name + "', 'true', 'false';")
                 self.query("DROP DATABASE " + self.database_name + ";")
                 self.iscreated = False
-            except pyodbc.DatabaseError as e:
+            except pyodbc.Error as e:
                 print("Unexpected error for drop db " + self.database_name + ":", e)
                
     @classmethod
@@ -527,13 +525,16 @@ class DBText:
         
         colnames.sort(key=self.getColumnSortKey)
         return colnames, timestampcol
+    
+    def quote(self, tablespec):
+        return '"' + tablespec + '"'
      
     def extract_data_for_dump(self, ttcxn, tablespec, constraint=""):
         colnames, usemaxcol = self.get_column_names_for_spec(ttcxn, tablespec)
         if len(colnames) == 0:
             return [], []
         select_values = [ self.append_to_sql_query(col) for col in colnames ]
-        sqltext = 'SELECT '+ ",".join(select_values) + ' from [' + tablespec + '] ' + constraint
+        sqltext = 'SELECT '+ ",".join(select_values) + ' from ' + self.quote(tablespec) + ' ' + constraint
         if usemaxcol:
             sqltext += ' ORDER BY ' + usemaxcol
         try:
@@ -543,7 +544,7 @@ class DBText:
                 # Table has no rv, dump the constraint and assume the whole table is relevant
                 return self.extract_data_for_dump(ttcxn, tablespec)
             else:
-                sys.stderr.write("ERROR: could not write table(s) " + repr(tablespec) + " due to problems with query:\n")
+                sys.stderr.write(f"ERROR: could not write table(s) {tablespec} due to problems with query:\n{sqltext}\n")
                 sys.stderr.write(str(e) + "\n")
                 return [], colnames
         
