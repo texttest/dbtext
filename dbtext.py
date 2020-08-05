@@ -336,7 +336,7 @@ class DBText:
         elif column_tuple[1] in [ "binary", "timestamp" ]:
             return "master.sys.fn_varbintohexstr(%s)" % column_tuple[0]
         else:
-            return "CONVERT(nvarchar(max),%s)" % column_tuple[0]
+            return str(column_tuple[0])
 
     def get_row_data(self, row, column_names, col_name):
         for i, (name, _) in enumerate(column_names):
