@@ -339,7 +339,7 @@ class DBText:
     def get_row_data(self, row, column_names, col_name):
         for i, (name, _) in enumerate(column_names):
             if col_name == name:
-                return row[i].strip()
+                return str(row[i]).strip()
 
     def extract_blobs(self, column_value):
         return [ column_value ]
