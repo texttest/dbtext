@@ -33,18 +33,12 @@ class DBText:
         except pyodbc.Error as e:
             print("Unexpected error for db " + database + ":", e)
             raise
-
-    def create(self, mdffile=None, sqlfile=None):
-        localdbFolder = os.getenv("TEXTTEST_SANDBOX")
-        attachsql = "CREATE DATABASE " + self.database_name
-        if mdffile:
-            attachsql += " ON (FILENAME = '" + mdffile + "') FOR ATTACH_REBUILD_LOG"
-        elif localdbFolder:
-            if os.name == "nt":
-                localdbFolder = localdbFolder.replace('/','\\')
-            tmpDbFileName = os.path.join(localdbFolder, self.database_name + ".mdf")
-            attachsql += " ON (NAME = '" + self.database_name + "', FILENAME='" + tmpDbFileName + "')"
-        attachsql += ";" 
+        
+    def get_create_db_args(self, **kw):
+        return ""
+        
+    def create(self, sqlfile=None, **kw):
+        attachsql = "CREATE DATABASE " + self.database_name + self.get_create_db_args(**kw) + ";" 
         try:
             self.query(attachsql)
             self.iscreated = True
@@ -595,4 +589,17 @@ class DBText:
             if blobFileName:
                 with open(blobFileName, "wb") as f:
                     f.write(b)
-            
+                    
+                    
+class MSSQL_DBText(DBText):
+    def get_create_db_args(self, mdffile=None):
+        localdbFolder = os.getenv("TEXTTEST_SANDBOX")
+        if mdffile:
+            return " ON (FILENAME = '" + mdffile + "') FOR ATTACH_REBUILD_LOG"
+        elif localdbFolder:
+            if os.name == "nt":
+                localdbFolder = localdbFolder.replace('/','\\')
+            tmpDbFileName = os.path.join(localdbFolder, self.database_name + ".mdf")
+            return " ON (NAME = '" + self.database_name + "', FILENAME='" + tmpDbFileName + "')"
+        else:
+            return ""
