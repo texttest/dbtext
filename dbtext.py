@@ -7,6 +7,8 @@ dbtext is a class to use for dynamically create test databases within SQL Server
 """
 
 # http://code.google.com/p/pyodbc/
+import sqlite3
+
 import pyodbc
 import os, sys, subprocess, locale
 import codecs
@@ -191,7 +193,6 @@ class DBText:
         keys = ", ".join([ self.quote(k) for k in data.keys() ])
         quoted_table = self.quote(table_name)
         sql = f"INSERT INTO {quoted_table} ({keys}) VALUES ({valueStr})"
-        
         if identity_insert:
             sql = "SET IDENTITY_INSERT " + quoted_table + " ON; " + sql + "; SET IDENTITY_INSERT " + quoted_table + " OFF"  
         try:
@@ -654,4 +655,84 @@ class MySQL_DBText(DBText):
     def make_connection_string_template(cls):
         driver = cls.get_driver()
         return 'DRIVER={' + driver + '};SERVER=localhost;USER=root;OPTION=3;DATABASE=%s;'
-    
+
+
+class Sqlite3_DBText(DBText):
+
+    @classmethod
+    def make_connection(cls, dbname):
+        return sqlite3.connect(f"{dbname}.db")
+
+    def create(self, sqlfile=None, **kw):
+        try:
+            self.iscreated = True
+            with self.make_connection(self.database_name) as ttcxn:
+                if sqlfile and os.path.isfile(sqlfile):
+                    self.read_sql_file(ttcxn, sqlfile)
+
+                tables_dir_name = self.get_tables_dir_name()
+                if os.path.isdir(tables_dir_name):
+                    self.read_tables_dir(ttcxn, tables_dir_name)
+
+                self.readrv(ttcxn)
+        except pyodbc.Error as e:
+            print(f"Unexpected error for create db {self.database_name}:\n", e)
+            raise
+
+    def drop(self):
+        pass
+
+    def execute_setup_query(self, ttcxn, currQuery):
+        ttcxn.executescript(currQuery)
+
+    def get_table_names(self, ttcxn):
+        cursor = ttcxn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [name[0] for name in cursor.fetchall()]
+        return tables
+
+    def get_column_names(self, ttcxn, tablename):
+        cursor = ttcxn.cursor()
+        cursor.execute(f"PRAGMA TABLE_INFO({tablename})")
+
+        class Sqlite3Column:
+            def __init__(self, pragma_data):
+                self.column_name = pragma_data[1]
+                self.type_name = pragma_data[2].lower()
+            def __repr__(self):
+                return f"Sqlite3Column({self.column_name}, {self.type_name})"
+
+        cols = [Sqlite3Column(pragma_data) for pragma_data in cursor.fetchall()]
+
+        colnames = []
+        timestampcol = None
+        include_timestamp_var = os.getenv("DB_TABLE_DUMP_INCLUDE_TIMESTAMP")
+        include_timestamp_tables = []
+        if include_timestamp_var:
+            include_timestamp_tables = include_timestamp_var.split(',')
+        for col in cols:
+            if col.type_name == "timestamp":
+                timestampcol = col.column_name
+                if tablename in include_timestamp_tables:
+                    colnames.append((col.column_name, col.type_name))
+            if col.type_name != "timestamp":
+                colnames.append((col.column_name, col.type_name))
+
+        colnames.sort(key=self.getColumnSortKey)
+        return colnames, timestampcol
+
+    def insert_row(self, ttcxn, table_name, data, identity_insert=False):
+        if not data:
+            return
+
+        valueStr = ("?," * len(data))[:-1]
+        keys = ", ".join([self.quote(k) for k in data.keys()])
+        quoted_table = self.quote(table_name)
+        sql = f"INSERT INTO {quoted_table} ({keys}) VALUES ({valueStr})"
+        if identity_insert:
+            sql = "SET IDENTITY_INSERT " + quoted_table + " ON; " + sql + "; SET IDENTITY_INSERT " + quoted_table + " OFF"
+        ttcxn.cursor().execute(sql, list(data.values()))
+
+
+
+
