@@ -219,11 +219,11 @@ class DBText:
         return self.cursor().execute(s)
 
     def single(self):
-        self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+        pass # no generic way to do this in sql
 
     def multi(self):
-        self.query("ALTER DATABASE " + self.database_name + " SET MULTI_USER")
-
+        pass # no generic way to do this in sql
+    
     def query_single(self, q):
         try:
             self.single()
@@ -249,43 +249,6 @@ class DBText:
             except pyodbc.Error as e:
                 print("Unexpected error for drop db " + self.database_name + ":", e)
                
-    @classmethod
-    def get_driver(cls):
-        odbc, legacy = [], []
-        for driver in pyodbc.drivers():
-            if driver.startswith("ODBC Driver"):
-                odbc.append(driver)
-            elif driver.startswith("SQL Server"):
-                legacy.append(driver)
-
-        if odbc:
-            return max(odbc)
-        elif legacy:
-            return max(legacy)
-        else:
-            raise RuntimeError("No suitable drivers found for SQL Server LocalDB, is it installed?")
-    
-    @classmethod
-    def get_localdb_server(cls):
-        proc = subprocess.Popen([ "SqlLocalDB", "info"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        out = proc.communicate()[0]
-        installed = [ str(line.strip(), locale.getpreferredencoding()) for line in out.splitlines() ]
-        if cls.enforceVersion is not None:
-            candidates = [ cls.enforceVersion ]
-        else:
-            candidates = [ "MSSQLLocalDB", "v11.0" ]
-        for candidate in candidates:
-            if candidate in installed:
-                return candidate
-        
-        raise RuntimeError("No recognised default LocalDB instance found, is it installed correctly?")
-               
-    @classmethod
-    def make_connection_string_template(cls):
-        driver = cls.get_driver()
-        server = cls.get_localdb_server()
-        return 'DRIVER={' + driver + '};SERVER=(localdb)\\' + server + ';Integrated Security=true;DATABASE=%s;'
-    
     def get_connection_string(self, driver=True):
         connstr = self.connectionStringTemplate % self.database_name
         if not driver:
@@ -300,8 +263,7 @@ class DBText:
         return pyodbc.connect(connstr, autocommit=True)
             
     def readrv(self, ttcxn):
-        rows = ttcxn.cursor().execute('select master.sys.fn_varbintohexstr(@@DBTS) AS maxrv').fetchall()
-        self.startrv = rows[0].maxrv
+        pass # Really an MSSQL concept
         
     def readmax(self):
         if 'TEXTTEST_DUMPTABLES' not in os.environ:
@@ -603,3 +565,70 @@ class MSSQL_DBText(DBText):
             return " ON (NAME = '" + self.database_name + "', FILENAME='" + tmpDbFileName + "')"
         else:
             return ""
+        
+    def single(self):
+        self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+
+    def multi(self):
+        self.query("ALTER DATABASE " + self.database_name + " SET MULTI_USER")
+        
+    def readrv(self, ttcxn):
+        rows = ttcxn.cursor().execute('select master.sys.fn_varbintohexstr(@@DBTS) AS maxrv').fetchall()
+        self.startrv = rows[0].maxrv
+    
+    @classmethod
+    def get_driver(cls):
+        odbc, legacy = [], []
+        for driver in pyodbc.drivers():
+            if driver.startswith("ODBC Driver"):
+                odbc.append(driver)
+            elif driver.startswith("SQL Server"):
+                legacy.append(driver)
+
+        if odbc:
+            return max(odbc)
+        elif legacy:
+            return max(legacy)
+        else:
+            raise RuntimeError("No suitable drivers found for SQL Server LocalDB, is it installed?")
+    
+    @classmethod
+    def get_localdb_server(cls):
+        proc = subprocess.Popen([ "SqlLocalDB", "info"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out = proc.communicate()[0]
+        installed = [ str(line.strip(), locale.getpreferredencoding()) for line in out.splitlines() ]
+        if cls.enforceVersion is not None:
+            candidates = [ cls.enforceVersion ]
+        else:
+            candidates = [ "MSSQLLocalDB", "v11.0" ]
+        for candidate in candidates:
+            if candidate in installed:
+                return candidate
+        
+        raise RuntimeError("No recognised default LocalDB instance found, is it installed correctly?")
+               
+    @classmethod
+    def make_connection_string_template(cls):
+        driver = cls.get_driver()
+        server = cls.get_localdb_server()
+        return 'DRIVER={' + driver + '};SERVER=(localdb)\\' + server + ';Integrated Security=true;DATABASE=%s;'
+    
+    
+class MySQL_DBText(DBText):
+    @classmethod
+    def get_driver(cls):
+        drivers = []
+        for driver in pyodbc.drivers():
+            if driver.startswith("MySQL"):
+                drivers.append(driver)
+
+        if drivers:
+            return max(drivers)
+        else:
+            raise RuntimeError("No suitable drivers found for MySQL, is it installed?")
+               
+    @classmethod
+    def make_connection_string_template(cls):
+        driver = cls.get_driver()
+        return 'DRIVER={' + driver + '};SERVER=localhost;USER=root;OPTION=3;DATABASE=%s;'
+    
