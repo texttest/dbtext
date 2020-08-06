@@ -30,22 +30,15 @@ class DBText:
         try:
             self.cnxn = master_connection or self.make_connection("master")
             self.isconnected = True
-        except pyodbc.DatabaseError as e:
+        except pyodbc.Error as e:
             print("Unexpected error for db " + database + ":", e)
             raise
-
-    def create(self, mdffile=None, sqlfile=None):
-        localdbFolder = os.getenv("TEXTTEST_SANDBOX")
-        attachsql = "CREATE DATABASE " + self.database_name
-        if mdffile:
-            attachsql += " ON (FILENAME = '" + mdffile + "') FOR ATTACH_REBUILD_LOG"
-        elif localdbFolder:
-            if os.name == "nt":
-                localdbFolder = localdbFolder.replace('/','\\')
-            if False: # only needed on sqlserver
-                tmpDbFileName = os.path.join(localdbFolder, self.database_name + ".mdf")
-                attachsql += " ON (NAME = '" + self.database_name + "', FILENAME='" + tmpDbFileName + "')"
-        attachsql += ";" 
+        
+    def get_create_db_args(self, **kw):
+        return ""
+        
+    def create(self, sqlfile=None, **kw):
+        attachsql = "CREATE DATABASE " + self.database_name + self.get_create_db_args(**kw) + ";" 
         try:
             self.query(attachsql)
             self.iscreated = True
@@ -58,7 +51,7 @@ class DBText:
                     self.read_tables_dir(ttcxn, tables_dir_name)
 
                 self.readrv(ttcxn)
-        except (pyodbc.Error, pyodbc.ProgrammingError) as e:
+        except pyodbc.Error as e:
             print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
             raise
         
@@ -192,11 +185,12 @@ class DBText:
             return
         
         valueStr = ("?," * len(data))[:-1]
-        #sql = "INSERT [dbo].[" + table_name + "] ([" + "], [".join(data.keys()) + "]) VALUES (" + valueStr + ")"
-        keys = ", ".join(data.keys())
-        sql = f"INSERT INTO {table_name} ({keys}) VALUES ({valueStr})"
+        keys = ", ".join([ self.quote(k) for k in data.keys() ])
+        quoted_table = self.quote(table_name)
+        sql = f"INSERT INTO {quoted_table} ({keys}) VALUES ({valueStr})"
+        
         if identity_insert:
-            sql = "SET IDENTITY_INSERT [" + table_name + "] ON; " + sql + "; SET IDENTITY_INSERT [" + table_name + "] OFF"  
+            sql = "SET IDENTITY_INSERT " + quoted_table + " ON; " + sql + "; SET IDENTITY_INSERT " + quoted_table + " OFF"  
         try:
             ttcxn.cursor().execute(sql, *list(data.values()))
         except pyodbc.DatabaseError as e:
@@ -214,7 +208,7 @@ class DBText:
         try:
             with self.make_connection(self.database_name) as ttcxn:
                 self.readrv(ttcxn)
-        except pyodbc.DatabaseError as e:
+        except pyodbc.Error as e:
             print("Unexpected error for update rv " + self.database_name + ":", e)
             pass
     
@@ -225,17 +219,15 @@ class DBText:
         return self.cursor().execute(s)
 
     def single(self):
-        #self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
-        pass
+        pass # no generic way to do this in sql
 
     def multi(self):
-        #self.query("ALTER DATABASE " + self.database_name + " SET MULTI_USER")
-        pass
-
+        pass # no generic way to do this in sql
+    
     def query_single(self, q):
         try:
             self.single()
-        except:
+        except pyodbc.Error:
             print("Failed to go into single user mode.")
         try:
             self.query(q)
@@ -250,61 +242,13 @@ class DBText:
 
     def drop(self):
         if self.iscreated:
+            self.single()
             try:
-                ##print "Removing database: " + self.database_name
-                self.single()
-            except pyodbc.DatabaseError as e:
-                print("Unexpected error for alter db " + self.database_name + ":", e)
-            try:
-                ##self.query("EXEC sp_detach_db '" + self.database_name + "', 'true', 'false';")
                 self.query("DROP DATABASE " + self.database_name + ";")
                 self.iscreated = False
-            except pyodbc.DatabaseError as e:
+            except pyodbc.Error as e:
                 print("Unexpected error for drop db " + self.database_name + ":", e)
                
-    @classmethod
-    def get_driver(cls):
-        odbc, legacy = [], []
-        for driver in pyodbc.drivers():
-            print(driver)
-            if driver.startswith("ODBC Driver"):
-                odbc.append(driver)
-            elif driver.startswith("SQL Server"):
-                legacy.append(driver)
-            elif driver.startswith("MySQL"):
-                odbc.append(driver)
-
-        if odbc:
-            return max(odbc)
-        elif legacy:
-            return max(legacy)
-        else:
-            raise RuntimeError("No suitable drivers found for SQL Server LocalDB, is it installed?")
-    
-    @classmethod
-    def get_localdb_server(cls):
-        proc = subprocess.Popen([ "SqlLocalDB", "info"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        out = proc.communicate()[0]
-        installed = [ str(line.strip(), locale.getpreferredencoding()) for line in out.splitlines() ]
-        if cls.enforceVersion is not None:
-            candidates = [ cls.enforceVersion ]
-        else:
-            candidates = [ "MSSQLLocalDB", "v11.0" ]
-        for candidate in candidates:
-            if candidate in installed:
-                return candidate
-        
-        raise RuntimeError("No recognised default LocalDB instance found, is it installed correctly?")
-               
-    @classmethod
-    def make_connection_string_template(cls):
-        driver = cls.get_driver()
-        if driver == "MySQL":
-            server = "localhost;USER=root;OPTION=3"
-        else:
-            server = f"(localdb)\\{cls.get_localdb_server()};Integrated Security=true"
-        return 'DRIVER={' + driver + '};SERVER=' + server +';DATABASE=%s;'
-    
     def get_connection_string(self, driver=True):
         connstr = self.connectionStringTemplate % self.database_name
         if not driver:
@@ -319,9 +263,7 @@ class DBText:
         return pyodbc.connect(connstr, autocommit=True)
             
     def readrv(self, ttcxn):
-        #rows = ttcxn.cursor().execute('select master.sys.fn_varbintohexstr(@@DBTS) AS maxrv').fetchall()
-        #self.startrv = rows[0].maxrv
-        pass
+        pass # Really an MSSQL concept
         
     def readmax(self):
         if 'TEXTTEST_DUMPTABLES' not in os.environ:
@@ -353,7 +295,7 @@ class DBText:
     def get_row_data(self, row, column_names, col_name):
         for i, (name, _) in enumerate(column_names):
             if col_name == name:
-                return row[i].strip()
+                return str(row[i]).strip()
 
     def extract_blobs(self, column_value):
         return [ column_value ]
@@ -539,13 +481,16 @@ class DBText:
         
         colnames.sort(key=self.getColumnSortKey)
         return colnames, timestampcol
+    
+    def quote(self, tablespec):
+        return '"' + tablespec + '"'
      
     def extract_data_for_dump(self, ttcxn, tablespec, constraint=""):
         colnames, usemaxcol = self.get_column_names_for_spec(ttcxn, tablespec)
         if len(colnames) == 0:
             return [], []
         select_values = [ self.append_to_sql_query(col) for col in colnames ]
-        sqltext = 'SELECT '+ ",".join(select_values) + ' from ' + tablespec + ' ' + constraint
+        sqltext = 'SELECT '+ ",".join(select_values) + ' from ' + self.quote(tablespec) + ' ' + constraint
         if usemaxcol:
             sqltext += ' ORDER BY ' + usemaxcol
         try:
@@ -606,4 +551,84 @@ class DBText:
             if blobFileName:
                 with open(blobFileName, "wb") as f:
                     f.write(b)
-            
+                    
+                    
+class MSSQL_DBText(DBText):
+    def get_create_db_args(self, mdffile=None):
+        localdbFolder = os.getenv("TEXTTEST_SANDBOX")
+        if mdffile:
+            return " ON (FILENAME = '" + mdffile + "') FOR ATTACH_REBUILD_LOG"
+        elif localdbFolder:
+            if os.name == "nt":
+                localdbFolder = localdbFolder.replace('/','\\')
+            tmpDbFileName = os.path.join(localdbFolder, self.database_name + ".mdf")
+            return " ON (NAME = '" + self.database_name + "', FILENAME='" + tmpDbFileName + "')"
+        else:
+            return ""
+        
+    def single(self):
+        self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+
+    def multi(self):
+        self.query("ALTER DATABASE " + self.database_name + " SET MULTI_USER")
+        
+    def readrv(self, ttcxn):
+        rows = ttcxn.cursor().execute('select master.sys.fn_varbintohexstr(@@DBTS) AS maxrv').fetchall()
+        self.startrv = rows[0].maxrv
+    
+    @classmethod
+    def get_driver(cls):
+        odbc, legacy = [], []
+        for driver in pyodbc.drivers():
+            if driver.startswith("ODBC Driver"):
+                odbc.append(driver)
+            elif driver.startswith("SQL Server"):
+                legacy.append(driver)
+
+        if odbc:
+            return max(odbc)
+        elif legacy:
+            return max(legacy)
+        else:
+            raise RuntimeError("No suitable drivers found for SQL Server LocalDB, is it installed?")
+    
+    @classmethod
+    def get_localdb_server(cls):
+        proc = subprocess.Popen([ "SqlLocalDB", "info"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out = proc.communicate()[0]
+        installed = [ str(line.strip(), locale.getpreferredencoding()) for line in out.splitlines() ]
+        if cls.enforceVersion is not None:
+            candidates = [ cls.enforceVersion ]
+        else:
+            candidates = [ "MSSQLLocalDB", "v11.0" ]
+        for candidate in candidates:
+            if candidate in installed:
+                return candidate
+        
+        raise RuntimeError("No recognised default LocalDB instance found, is it installed correctly?")
+               
+    @classmethod
+    def make_connection_string_template(cls):
+        driver = cls.get_driver()
+        server = cls.get_localdb_server()
+        return 'DRIVER={' + driver + '};SERVER=(localdb)\\' + server + ';Integrated Security=true;DATABASE=%s;'
+    
+    
+class MySQL_DBText(DBText):
+    @classmethod
+    def get_driver(cls):
+        drivers = []
+        for driver in pyodbc.drivers():
+            if driver.startswith("MySQL"):
+                drivers.append(driver)
+
+        if drivers:
+            return max(drivers)
+        else:
+            raise RuntimeError("No suitable drivers found for MySQL, is it installed?")
+               
+    @classmethod
+    def make_connection_string_template(cls):
+        driver = cls.get_driver()
+        return 'DRIVER={' + driver + '};SERVER=localhost;USER=root;OPTION=3;DATABASE=%s;'
+    
