@@ -567,8 +567,11 @@ class MSSQL_DBText(DBText):
             return ""
         
     def single(self):
-        self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
-
+        try:
+            self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+        except pyodbc.Error as e:
+            print("Unexpected error for alter db " + self.database_name + ":", e)
+        
     def multi(self):
         self.query("ALTER DATABASE " + self.database_name + " SET MULTI_USER")
         
