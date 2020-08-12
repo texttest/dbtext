@@ -410,6 +410,9 @@ class DBText:
     def get_table_names(self, ttcxn):
         cursor = ttcxn.cursor()
         return [ row.table_name for row in cursor.tables(tableType="TABLE") ]
+    
+    def in_exclude_patterns(self, tn, patterns):
+        return any((fnmatch(tn, pattern) for pattern in patterns))
 
     def expand_table_names(self, ttcxn, table_str, exclude):
         tables = []
@@ -421,7 +424,10 @@ class DBText:
                         tables.append(tn)
             else:
                 tables.append(pattern)
-        return [t for t in tables if t not in exclude_names]
+        if "*" in exclude:
+            return [t for t in tables if not self.in_exclude_patterns(t, exclude_names) ]
+        else:
+            return [t for t in tables if t not in exclude_names]
 
     def get_blob_patterns_for_dump(self, sut_ext):
         return []
