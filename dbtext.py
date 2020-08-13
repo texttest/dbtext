@@ -43,23 +43,33 @@ class DBText:
         return ""
         
     def create(self, sqlfile=None, **kw):
-        attachsql = "CREATE DATABASE " + self.database_name + self.get_create_db_args(**kw) + ";" 
+        self.create_empty_db(**kw)
+        self.populate_empty_db(sqlfile)
+
+    def create_empty_db(self, **kw):
         try:
+            attachsql = "CREATE DATABASE " + self.database_name + self.get_create_db_args(**kw) + ";"
             self.query(attachsql)
+        except pyodbc.Error as e:
+            print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
+            raise
+
+    def populate_empty_db(self, sqlfile):
+        try:
             self.iscreated = True
             with self.make_connection(self.database_name) as ttcxn:
                 if sqlfile and os.path.isfile(sqlfile):
                     self.read_sql_file(ttcxn, sqlfile)
-                
+
                 tables_dir_name = self.get_tables_dir_name()
                 if os.path.isdir(tables_dir_name):
                     self.read_tables_dir(ttcxn, tables_dir_name)
 
                 self.readrv(ttcxn)
         except pyodbc.Error as e:
-            print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
+            print(f"Unexpected error for populate empty db {self.database_name}:\n", e)
             raise
-        
+
     def execute_setup_query(self, ttcxn, currQuery):
         try:
             ttcxn.cursor().execute(currQuery)
@@ -195,6 +205,9 @@ class DBText:
         sql = f"INSERT INTO {quoted_table} ({keys}) VALUES ({valueStr})"
         if identity_insert:
             sql = "SET IDENTITY_INSERT " + quoted_table + " ON; " + sql + "; SET IDENTITY_INSERT " + quoted_table + " OFF"  
+        self.insert_row_data(ttcxn, sql, data, table_name)
+
+    def insert_row_data(self, ttcxn, sql, data, table_name):
         try:
             ttcxn.cursor().execute(sql, *list(data.values()))
         except pyodbc.DatabaseError as e:
@@ -207,7 +220,7 @@ class DBText:
                 sys.stderr.write("Failed to insert data into " + table_name + ":\n")
                 sys.stderr.write(pformat(data) + "\n")
                 raise
-        
+
     def update_start_rv(self):
         try:
             with self.make_connection(self.database_name) as ttcxn:
@@ -468,7 +481,7 @@ class DBText:
                 return i
     
     def get_column_names(self, ttcxn, tablename):
-        cols = ttcxn.cursor().columns(table=tablename)
+        cols = self.query_for_columns(ttcxn, tablename)
         colnames = []
         timestampcol = None 
         include_timestamp_var = os.getenv("DB_TABLE_DUMP_INCLUDE_TIMESTAMP")
@@ -485,7 +498,10 @@ class DBText:
         
         colnames.sort(key=self.getColumnSortKey)
         return colnames, timestampcol
-    
+
+    def query_for_columns(self, ttcxn, tablename):
+        return ttcxn.cursor().columns(table=tablename)
+
     def quote(self, tablespec):
         return '"' + tablespec + '"'
      
@@ -663,21 +679,8 @@ class Sqlite3_DBText(DBText):
     def make_connection(cls, dbname):
         return sqlite3.connect(f"{dbname}.db")
 
-    def create(self, sqlfile=None, **kw):
-        try:
-            self.iscreated = True
-            with self.make_connection(self.database_name) as ttcxn:
-                if sqlfile and os.path.isfile(sqlfile):
-                    self.read_sql_file(ttcxn, sqlfile)
-
-                tables_dir_name = self.get_tables_dir_name()
-                if os.path.isdir(tables_dir_name):
-                    self.read_tables_dir(ttcxn, tables_dir_name)
-
-                self.readrv(ttcxn)
-        except pyodbc.Error as e:
-            print(f"Unexpected error for create db {self.database_name}:\n", e)
-            raise
+    def create_empty_db(self):
+        pass
 
     def drop(self):
         pass
@@ -691,7 +694,7 @@ class Sqlite3_DBText(DBText):
         tables = [name[0] for name in cursor.fetchall()]
         return tables
 
-    def get_column_names(self, ttcxn, tablename):
+    def query_for_columns(self, ttcxn, tablename):
         cursor = ttcxn.cursor()
         cursor.execute(f"PRAGMA TABLE_INFO({tablename})")
 
@@ -703,35 +706,11 @@ class Sqlite3_DBText(DBText):
                 return f"Sqlite3Column({self.column_name}, {self.type_name})"
 
         cols = [Sqlite3Column(pragma_data) for pragma_data in cursor.fetchall()]
+        return cols
 
-        colnames = []
-        timestampcol = None
-        include_timestamp_var = os.getenv("DB_TABLE_DUMP_INCLUDE_TIMESTAMP")
-        include_timestamp_tables = []
-        if include_timestamp_var:
-            include_timestamp_tables = include_timestamp_var.split(',')
-        for col in cols:
-            if col.type_name == "timestamp":
-                timestampcol = col.column_name
-                if tablename in include_timestamp_tables:
-                    colnames.append((col.column_name, col.type_name))
-            if col.type_name != "timestamp":
-                colnames.append((col.column_name, col.type_name))
-
-        colnames.sort(key=self.getColumnSortKey)
-        return colnames, timestampcol
-
-    def insert_row(self, ttcxn, table_name, data, identity_insert=False):
-        if not data:
-            return
-
-        valueStr = ("?," * len(data))[:-1]
-        keys = ", ".join([self.quote(k) for k in data.keys()])
-        quoted_table = self.quote(table_name)
-        sql = f"INSERT INTO {quoted_table} ({keys}) VALUES ({valueStr})"
-        if identity_insert:
-            sql = "SET IDENTITY_INSERT " + quoted_table + " ON; " + sql + "; SET IDENTITY_INSERT " + quoted_table + " OFF"
+    def insert_row_data(self, ttcxn, sql, data, table_name):
         ttcxn.cursor().execute(sql, list(data.values()))
+
 
 
 
