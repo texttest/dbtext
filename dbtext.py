@@ -7,6 +7,8 @@ dbtext is a class to use for dynamically create test databases within SQL Server
 """
 
 # http://code.google.com/p/pyodbc/
+import sqlite3
+
 import pyodbc
 import os, sys, subprocess, locale
 import codecs
@@ -17,6 +19,9 @@ from fnmatch import fnmatch
 from datetime import datetime
 
 class DBText:
+    """
+    This is an abstract class - use one of the subclasses specific to your database server.
+    """
     connectionStringTemplate = None
     enforceVersion = None
     def __init__(self, database=None, master_connection=None):
@@ -38,23 +43,33 @@ class DBText:
         return ""
         
     def create(self, sqlfile=None, **kw):
-        attachsql = "CREATE DATABASE " + self.database_name + self.get_create_db_args(**kw) + ";" 
+        self.create_empty_db(**kw)
+        self.populate_empty_db(sqlfile)
+
+    def create_empty_db(self, **kw):
         try:
+            attachsql = "CREATE DATABASE " + self.database_name + self.get_create_db_args(**kw) + ";"
             self.query(attachsql)
+        except pyodbc.Error as e:
+            print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
+            raise
+
+    def populate_empty_db(self, sqlfile):
+        try:
             self.iscreated = True
             with self.make_connection(self.database_name) as ttcxn:
                 if sqlfile and os.path.isfile(sqlfile):
                     self.read_sql_file(ttcxn, sqlfile)
-                
+
                 tables_dir_name = self.get_tables_dir_name()
                 if os.path.isdir(tables_dir_name):
                     self.read_tables_dir(ttcxn, tables_dir_name)
 
                 self.readrv(ttcxn)
         except pyodbc.Error as e:
-            print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
+            print(f"Unexpected error for populate empty db {self.database_name}:\n", e)
             raise
-        
+
     def execute_setup_query(self, ttcxn, currQuery):
         try:
             ttcxn.cursor().execute(currQuery)
@@ -188,9 +203,11 @@ class DBText:
         keys = ", ".join([ self.quote(k) for k in data.keys() ])
         quoted_table = self.quote(table_name)
         sql = f"INSERT INTO {quoted_table} ({keys}) VALUES ({valueStr})"
-        
         if identity_insert:
             sql = "SET IDENTITY_INSERT " + quoted_table + " ON; " + sql + "; SET IDENTITY_INSERT " + quoted_table + " OFF"  
+        self.insert_row_data(ttcxn, sql, data, table_name)
+
+    def insert_row_data(self, ttcxn, sql, data, table_name):
         try:
             ttcxn.cursor().execute(sql, *list(data.values()))
         except pyodbc.DatabaseError as e:
@@ -203,7 +220,7 @@ class DBText:
                 sys.stderr.write("Failed to insert data into " + table_name + ":\n")
                 sys.stderr.write(pformat(data) + "\n")
                 raise
-        
+
     def update_start_rv(self):
         try:
             with self.make_connection(self.database_name) as ttcxn:
@@ -470,7 +487,7 @@ class DBText:
                 return i
     
     def get_column_names(self, ttcxn, tablename):
-        cols = ttcxn.cursor().columns(table=tablename)
+        cols = self.query_for_columns(ttcxn, tablename)
         colnames = []
         timestampcol = None 
         include_timestamp_var = os.getenv("DB_TABLE_DUMP_INCLUDE_TIMESTAMP")
@@ -487,7 +504,10 @@ class DBText:
         
         colnames.sort(key=self.getColumnSortKey)
         return colnames, timestampcol
-    
+
+    def query_for_columns(self, ttcxn, tablename):
+        return ttcxn.cursor().columns(table=tablename)
+
     def quote(self, tablespec):
         return '"' + tablespec + '"'
      
@@ -624,6 +644,26 @@ class MSSQL_DBText(DBText):
     
     
 class MySQL_DBText(DBText):
+
+    def __init__(self, database=None, master_connection=None, ansi_sql_mode=False):
+        """
+        Use this class when the database you want to set up for testing is MySQL
+        :param database: the name of the database to create for testing. You should give a name that is unique to your test case run, for example include the current process id in the name
+        :param master_connection: a connection to a database that already exists, that dbtext can use to create new databases.
+        By default it will try to connect to a database named 'master'. If one doesn't exist, you could just create an empty one with that name.
+        :param ansi_sql_mode: if the MySQL database is configured to have ANSI mode you should set this flag since it affects the syntax of the SQL you use
+        (see https://dev.mysql.com/doc/refman/5.7/en/sql-mode.html for more information about modes)
+        """
+        super().__init__(database, master_connection)
+        self.ansi_sql_mode=ansi_sql_mode
+
+    def quote(self, tablespec):
+        if self.ansi_sql_mode:
+            return super().quote(tablespec)
+        else:
+            # A default installation of MySQL does not use ANSI mode and uses backticks to escape reserved words in column names etc
+            return '`' + tablespec + '`'
+
     @classmethod
     def get_driver(cls):
         drivers = []
@@ -640,4 +680,47 @@ class MySQL_DBText(DBText):
     def make_connection_string_template(cls):
         driver = cls.get_driver()
         return 'DRIVER={' + driver + '};SERVER=localhost;USER=root;OPTION=3;DATABASE=%s;'
-    
+
+
+class Sqlite3_DBText(DBText):
+
+    @classmethod
+    def make_connection(cls, dbname):
+        return sqlite3.connect(f"{dbname}.db")
+
+    def create_empty_db(self):
+        pass
+
+    def drop(self):
+        pass
+
+    def execute_setup_query(self, ttcxn, currQuery):
+        ttcxn.executescript(currQuery)
+
+    def get_table_names(self, ttcxn):
+        cursor = ttcxn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [name[0] for name in cursor.fetchall()]
+        return tables
+
+    def query_for_columns(self, ttcxn, tablename):
+        cursor = ttcxn.cursor()
+        cursor.execute(f"PRAGMA TABLE_INFO({tablename})")
+
+        class Sqlite3Column:
+            def __init__(self, pragma_data):
+                self.column_name = pragma_data[1]
+                self.type_name = pragma_data[2].lower()
+            def __repr__(self):
+                return f"Sqlite3Column({self.column_name}, {self.type_name})"
+
+        cols = [Sqlite3Column(pragma_data) for pragma_data in cursor.fetchall()]
+        return cols
+
+    def insert_row_data(self, ttcxn, sql, data, table_name):
+        ttcxn.cursor().execute(sql, list(data.values()))
+
+
+
+
+
