@@ -120,7 +120,7 @@ class DBText:
             self.add_table_data(tableFile, ttcxn)
               
     @classmethod
-    def expand_value(cls, tablesDir, value):
+    def expand_value(cls, value, *args):
         if "${" in value:
             return os.path.expandvars(value)
         elif "###NOWDATETIME###" in value:
@@ -141,7 +141,7 @@ class DBText:
                     currRowData = []
                 elif ":" in line:
                     key, value = [ part.strip() for part in line.split(":", 1) ]
-                    value = cls.expand_value(tablesDir, value)    
+                    value = cls.expand_value(value, tablesDir, currRowData)    
                     currRowData.append((key, value))
         rows.append(currRowData)
         return rows
@@ -580,6 +580,12 @@ class DBText:
                     
                     
 class MSSQL_DBText(DBText):
+    def handle_datetimeoffset(self, dto_value):
+        # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
+        tup = struct.unpack("<6hI2h", dto_value)  # e.g., (2017, 3, 16, 10, 35, 18, 0, -6, 0)
+        tweaked = [tup[i] // 100 if i == 6 else tup[i] for i in range(len(tup))]
+        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}.{:07d} {:+03d}:{:02d}".format(*tweaked)
+    
     def get_create_db_args(self, mdffile=None):
         localdbFolder = os.getenv("TEXTTEST_SANDBOX")
         if mdffile:
@@ -592,6 +598,10 @@ class MSSQL_DBText(DBText):
         else:
             return ""
         
+    def extract_data_for_dump(self, ttcxn, *args, **kw):
+        ttcxn.add_output_converter(-155, self.handle_datetimeoffset)
+        return super().extract_data_for_dump(ttcxn, *args, **kw)
+    
     def single(self):
         try:
             self.query("ALTER DATABASE " + self.database_name + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
