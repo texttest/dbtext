@@ -103,10 +103,12 @@ class DBText:
         if currQuery.strip():
             self.execute_setup_query(ttcxn, currQuery)
 
-    def read_tables_dir(self, ttcxn, tables_dir_name):
+    def read_tables_dir(self, ttcxn, tables_dir_name, verbose=False):
         failedFiles = []
         for tableFile in glob(os.path.join(tables_dir_name, "*.table")):
             try:
+                if verbose:
+                    print("Reading data from", tableFile)
                 self.add_table_data(tableFile, ttcxn)
             except pyodbc.IntegrityError as ex:
                 fk_constraint_string = "FOREIGN KEY constraint"
