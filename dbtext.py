@@ -42,9 +42,9 @@ class DBText:
     def get_create_db_args(self, **kw):
         return ""
         
-    def create(self, sqlfile=None, **kw):
+    def create(self, sqlfile=None, encoding=None, **kw):
         self.create_empty_db(**kw)
-        self.populate_empty_db(sqlfile)
+        self.populate_empty_db(sqlfile, encoding)
 
     def create_empty_db(self, **kw):
         try:
@@ -54,12 +54,12 @@ class DBText:
             print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
             raise
 
-    def populate_empty_db(self, sqlfile):
+    def populate_empty_db(self, sqlfile, encoding=None):
         try:
             self.iscreated = True
             with self.make_connection(self.database_name) as ttcxn:
                 if sqlfile and os.path.isfile(sqlfile):
-                    self.read_sql_file(ttcxn, sqlfile)
+                    self.read_sql_file(ttcxn, sqlfile, encoding)
 
                 tables_dir_name = self.get_tables_dir_name()
                 if os.path.isdir(tables_dir_name):
@@ -77,10 +77,10 @@ class DBText:
             print("Failed to execute query:\n" + repr(currQuery))
             raise
             
-    def read_sql_file(self, ttcxn, sqlfile):
+    def read_sql_file(self, ttcxn, sqlfile, encoding=None):
         currQuery = ''
         inComment = False
-        with open(sqlfile) as f:
+        with open(sqlfile, encoding=encoding) as f:
             for line in f:
                 line = line.strip()
                 if not line or "USE [" in line or line.startswith("--"):
