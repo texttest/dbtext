@@ -16,7 +16,8 @@ import shutil, struct
 from string import Template
 from glob import glob
 from fnmatch import fnmatch
-from datetime import datetime
+from datetime import datetime, date
+import json
 
 class DBText:
     """
@@ -42,9 +43,9 @@ class DBText:
     def get_create_db_args(self, **kw):
         return ""
         
-    def create(self, sqlfile=None, encoding=None, **kw):
+    def create(self, sqlfile=None, encoding=None, tables_dir=None, **kw):
         self.create_empty_db(**kw)
-        self.populate_empty_db(sqlfile, encoding)
+        self.populate_empty_db(sqlfile, tables_dir, encoding)
 
     def create_empty_db(self, **kw):
         try:
@@ -54,16 +55,16 @@ class DBText:
             print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
             raise
 
-    def populate_empty_db(self, sqlfile, encoding=None):
+    def populate_empty_db(self, sqlfile, tables_dir=None, encoding=None):
         try:
             self.iscreated = True
             with self.make_connection(self.database_name) as ttcxn:
                 if sqlfile and os.path.isfile(sqlfile):
                     self.read_sql_file(ttcxn, sqlfile, encoding)
 
-                tables_dir_name = self.get_tables_dir_name()
-                if os.path.isdir(tables_dir_name):
-                    self.read_tables_dir(ttcxn, tables_dir_name)
+                tables_dir = tables_dir or self.get_tables_dir_name()
+                if os.path.isdir(tables_dir):
+                    self.read_tables_dir(ttcxn, tables_dir)
 
                 self.readrv(ttcxn)
         except pyodbc.Error as e:
@@ -105,7 +106,7 @@ class DBText:
 
     def read_tables_dir(self, ttcxn, tables_dir_name, verbose=False):
         failedFiles = []
-        for tableFile in glob(os.path.join(tables_dir_name, "*.table")):
+        for tableFile in glob(os.path.join(tables_dir_name, "*.table")) + glob(os.path.join(tables_dir_name, "*.json")):
             try:
                 if verbose:
                     print("Reading data from", tableFile)
@@ -187,14 +188,23 @@ class DBText:
         else:
             return value
     
+    def parse_table_file_to_rowdicts(self, fn):
+        if fn.endswith(".json"):
+            return json.load(open(fn))
+        else:
+            tablesDir = os.path.dirname(fn)
+            rows = []
+            for currRowData in self.parse_table_file(fn):
+                currRowDict = {}
+                for key, value in currRowData:
+                    currRowDict[key] = self.parse_row_value(value, currRowDict, tablesDir)
+                rows.append(currRowDict)
+            return rows
+        
     def add_table_data(self, fn, ttcxn):
-        tablesDir = os.path.dirname(fn)
-        for currRowData in self.parse_table_file(fn):
-            table_name = os.path.basename(fn)[:-6]
-            currRowDict = {}
-            for key, value in currRowData:
-                currRowDict[key] = self.parse_row_value(value, currRowDict, tablesDir)
-                
+        rowData = self.parse_table_file_to_rowdicts(fn)
+        table_name = os.path.basename(fn).rsplit(".", 1)[0]
+        for currRowDict in rowData:
             self.insert_row(ttcxn, table_name, currRowDict)
           
     def insert_row(self, ttcxn, table_name, data, identity_insert=False):
@@ -334,6 +344,12 @@ class DBText:
                 column_value_str = str(column_value)
         finally: 
             return "%s: %s" % (column_name, column_value_str), blobs
+        
+    def parse_row_data_based_on_type(self, column_type, column_value):
+        if column_type.startswith("datetime"):
+            return datetime.fromisoformat(column_value)
+        else:
+            return column_value
 
     def getColumnSortKey(self, coldata):
         # Column ordering can vary a lot, depending on how the db was created. We always show the columns in a standard order
@@ -346,8 +362,10 @@ class DBText:
         else:
             return name
         
-    def get_tables_dir_name(self):
+    def get_tables_dir_name(self, json_format=False):
         prefix = self.database_name.split("db_")[0]
+        if json_format:
+            return prefix
         postfix = "db_tables"
         if prefix in [ "tt", "database" ]:
             return postfix
@@ -357,8 +375,8 @@ class DBText:
     def get_blob_patterns(self):
         return []
         
-    def make_empty_tables_dir(self, writeDir):
-        localName = self.get_tables_dir_name()
+    def make_empty_tables_dir(self, writeDir, json_format=False):
+        localName = self.get_tables_dir_name(json_format)
         dirName = os.path.join(writeDir, localName)
         if os.path.isdir(dirName):
             shutil.rmtree(dirName)
@@ -373,7 +391,8 @@ class DBText:
             dirsToMake.add(dirName)
         for d in dirsToMake:
             os.makedirs(d)
-        table_file_pattern = os.path.join(dirName, "${table_name}.table")
+        ext = "json" if json_format else "table"
+        table_file_pattern = os.path.join(dirName, "${table_name}." + ext)
         return table_file_pattern, blob_patterns
         
     def write_data_subset(self, writeDir, subset_data):
@@ -413,18 +432,18 @@ class DBText:
                 if newRow not in tablerows:
                     tablerows.append(newRow)
                     
-    def write_all_tables(self, table_file_pattern, blob_pattern, ttcxn):
-        for tablename in self.get_table_names(ttcxn):
+    def write_all_tables(self, table_file_pattern, blob_pattern, ttcxn, exclude=""):
+        for tablename in self.expand_table_names(ttcxn, "*", exclude):
             print("Making file for table", repr(tablename))
             self.dumptable(ttcxn, tablename, "", table_file_pattern, blob_pattern)
 
-    def write_data(self, writeDir, use_master_connection=False):
-        table_file_pattern, blob_pattern = self.make_empty_tables_dir(writeDir)
+    def write_data(self, writeDir, use_master_connection=False, json_format=False, **kw):
+        table_file_pattern, blob_pattern = self.make_empty_tables_dir(writeDir, json_format)
         if use_master_connection:
-            self.write_all_tables(table_file_pattern, blob_pattern, self.cnxn)
+            self.write_all_tables(table_file_pattern, blob_pattern, self.cnxn, **kw)
         else:
             with self.make_connection(self.database_name) as ttcxn:
-                self.write_all_tables(table_file_pattern, blob_pattern, ttcxn)
+                self.write_all_tables(table_file_pattern, blob_pattern, ttcxn, **kw)
 
     def get_table_names(self, ttcxn):
         cursor = ttcxn.cursor()
@@ -467,6 +486,82 @@ class DBText:
                 blob_patterns = self.get_blob_patterns_for_dump(sut_ext)
                 self.dumptable(ttcxn, tablename, constraint, table_fn_pattern, blob_patterns, dumpableBlobs)
                 
+    def get_primary_key_columns(self, ttcxn, tableName):
+        return tuple([ info[3] for info in ttcxn.cursor().primaryKeys(tableName) ])
+        
+    def evaluate_primary_key(self, pkeys, row_data):
+        return tuple(row_data[key] for key in pkeys)
+        
+    def categorise(self, data1, data2, pkeys):
+        created, updated, deleted = [], [], []
+        
+        ids1 = set([ self.evaluate_primary_key(pkeys, row_data) for row_data in data1 ])
+        ids2 = set([ self.evaluate_primary_key(pkeys, row_data) for row_data in data2 ])
+        for row in data1:
+            val = self.evaluate_primary_key(pkeys, row)
+            if val not in ids2:
+                deleted.append(row)
+        for row in data2:
+            val = self.evaluate_primary_key(pkeys, row)
+            if val in ids1:
+                if row not in data1:
+                    updated.append(row)
+            else:
+                created.append(row)
+        return created, updated, deleted
+    
+    def json_serial(self, obj):
+        """JSON serializer for objects not serializable by default json code"""
+    
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        else:
+            return str(obj)
+        
+    def json_dumps(self, rows):
+        return json.dumps(rows, indent=2, sort_keys=False, default=self.json_serial)
+
+    def dump_change_file(self, fn_template, change_type, new_data):
+        if len(new_data) > 0:
+            fn = fn_template.format(type=change_type)
+            with open(fn, "w") as f:
+                for tableName, rows in sorted(new_data.items()):
+                    f.write(tableName + ": ")
+                    f.write(self.json_dumps(rows) + "\n")
+
+    def convert_to_row_dicts(self, rows, colinfo):
+        table_data = []
+        colnames = [col[0] for col in colinfo]
+        for row in rows:
+            row_data = {}
+            for colname, value in zip(colnames, row):
+                valueToUse = value.isoformat() if isinstance(value, (datetime, date)) else value
+                row_data[colname] = valueToUse
+            table_data.append(row_data)
+        
+        return table_data
+
+    def dumpchanges(self, table_fn_pattern, tables_dir=None, exclude=""):
+        tables_dir = tables_dir or self.get_tables_dir_name()
+        created, updated, deleted = {}, {}, {}
+        with self.make_connection(self.database_name) as ttcxn:
+            for tableName in self.expand_table_names(ttcxn, "*", exclude):
+                rows, colinfo = self.extract_data_for_dump(ttcxn, tableName, "")
+                tableFile = os.path.join(tables_dir, tableName + ".json")
+                initial_table_data = self.parse_table_file_to_rowdicts(tableFile) if os.path.isfile(tableFile) else []
+                pkeys = self.get_primary_key_columns(ttcxn, tableName)
+                table_data = self.convert_to_row_dicts(rows, colinfo)
+                c, u, d = self.categorise(initial_table_data, table_data, pkeys)
+                if c:
+                    created[tableName] = c
+                if u:
+                    updated[tableName] = u
+                if d:
+                    deleted[tableName] = d
+        self.dump_change_file(table_fn_pattern, "created", created)
+        self.dump_change_file(table_fn_pattern, "updated", updated)
+        self.dump_change_file(table_fn_pattern, "deleted", deleted)        
+        
     def get_column_names_for_spec(self, ttcxn, tablespec):
         if "," in tablespec:
             colnames = []
@@ -539,8 +634,19 @@ class DBText:
         if len(rows) > 0:
             self.write_dump_data(rows, colnames, tablename, table_fn_pattern, blob_pattern, dumpableBlobs)
         
+    def write_json_dump(self, rows, colinfo, fileName):
+        table_data = self.convert_to_row_dicts(rows, colinfo)
+        with open(fileName, "w") as f:
+            f.write(self.json_dumps(table_data))
+        
     def write_dump_data(self, rows, colnames, tablename, table_fn_pattern, blob_patterns, dumpableBlobs=True):
         fileName = Template(table_fn_pattern).substitute(table_name=tablename)
+        if fileName.endswith(".json"):
+            self.write_json_dump(rows, colnames, fileName)
+        else:
+            self.write_tableformat_dump(rows, colnames, fileName, blob_patterns, dumpableBlobs)
+            
+    def write_tableformat_dump(self, rows, colnames, fileName, blob_patterns, dumpableBlobs):
         with codecs.open(fileName, mode='a', encoding='cp1252', errors='replace') as f:
             # Note "codecs.open" implicitly opens files in binary mode! Hence the normal handling of "\n" is disabled
             # Use os.linesep instead or we get unix line endings...
