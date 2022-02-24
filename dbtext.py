@@ -49,7 +49,7 @@ class DBText:
 
     def create_empty_db(self, **kw):
         try:
-            attachsql = "CREATE DATABASE " + self.database_name + self.get_create_db_args(**kw) + ";"
+            attachsql = "CREATE DATABASE " + self.quote(self.database_name) + self.get_create_db_args(**kw) + ";"
             self.query(attachsql)
         except pyodbc.Error as e:
             print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
@@ -781,7 +781,7 @@ class MSSQL_DBText(DBText):
         return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}.{:07d} {:+03d}:{:02d}".format(*tweaked)
     
     def get_create_db_args(self, mdffile=None):
-        localdbFolder = os.getenv("TEXTTEST_SANDBOX")
+        localdbFolder = os.getenv("TEXTTEST_SANDBOX") if "(localdb)" in self.connectionStringTemplate else None
         if mdffile:
             return " ON (FILENAME = '" + mdffile + "') FOR ATTACH_REBUILD_LOG"
         elif localdbFolder:
@@ -845,6 +845,12 @@ class MSSQL_DBText(DBText):
         driver = cls.get_driver()
         server = cls.get_localdb_server()
         return 'DRIVER={' + driver + '};SERVER=(localdb)\\' + server + ';Integrated Security=true;DATABASE=%s;'
+    
+    @classmethod
+    def set_connection_string_template(cls, server, user, password):
+        driver = cls.get_driver()
+        cls.connectionStringTemplate = 'DRIVER={' + driver + '};SERVER=' + server + ';UID=' + user + ';PWD=' + password + ';DATABASE=%s;'
+        return cls.connectionStringTemplate
     
     
 class MySQL_DBText(DBText):
