@@ -16,6 +16,7 @@ import shutil, struct
 from string import Template
 from glob import glob
 from fnmatch import fnmatch
+import jsonutils
 from datetime import datetime, date
 import json
 
@@ -510,24 +511,10 @@ class DBText:
                 created.append(row)
         return created, updated, deleted
     
-    def json_serial(self, obj):
-        """JSON serializer for objects not serializable by default json code"""
-    
-        if isinstance(obj, (datetime, date)):
-            return obj.isoformat()
-        else:
-            return str(obj)
-        
-    def json_dumps(self, rows):
-        return json.dumps(rows, indent=2, sort_keys=False, default=self.json_serial)
-
     def dump_change_file(self, fn_template, change_type, new_data):
         if len(new_data) > 0:
             fn = fn_template.format(type=change_type)
-            with open(fn, "w") as f:
-                for tableName, rows in sorted(new_data.items()):
-                    f.write(tableName + ": ")
-                    f.write(self.json_dumps(rows) + "\n")
+            jsonutils.dump_json_tables(new_data, fn)
 
     def convert_to_row_dicts(self, rows, colinfo):
         table_data = []
@@ -637,7 +624,7 @@ class DBText:
     def write_json_dump(self, rows, colinfo, fileName):
         table_data = self.convert_to_row_dicts(rows, colinfo)
         with open(fileName, "w") as f:
-            f.write(self.json_dumps(table_data))
+            jsonutils.dump_json_table(f, table_data)
         
     def write_dump_data(self, rows, colnames, tablename, table_fn_pattern, blob_patterns, dumpableBlobs=True):
         fileName = Template(table_fn_pattern).substitute(table_name=tablename)
