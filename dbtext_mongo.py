@@ -42,6 +42,7 @@ class MongoPipeReaderThread(Thread):
         self.join()
         
 class MongoTextClient:
+    ignore_db_names = [ "admin", "config", "local" ]
     def __init__(self, *args, **kw):
         self.client = pymongo.MongoClient(*args, **kw)
         
@@ -79,11 +80,12 @@ class MongoTextClient:
     
     def parse_mongo(self, ignoreDbs=None):
         data = {}
-        ignore_db_names = [ "admin", "config", "local" ]
         if ignoreDbs:
-            ignore_db_names += [ db.lower() for db in ignoreDbs ]
+            ignore = self.ignore_db_names + [ db.lower() for db in ignoreDbs ]
+        else:
+            ignore = self.ignore_db_names
         for databaseName in self.client.list_database_names():
-            if databaseName.lower() not in ignore_db_names:
+            if databaseName.lower() not in ignore:
                 database = self.client[databaseName]
                 dbdata = {}
                 for collectionName in database.list_collection_names():
@@ -95,6 +97,14 @@ class MongoTextClient:
                     data[databaseName] = dbdata
         return data
     
+    def has_collection(self, collectionName):
+        for databaseName in self.client.list_database_names():
+            if databaseName.lower() not in self.ignore_db_names:
+                coll = self.client[databaseName].get_collection(collectionName)
+                if coll and coll.count_documents({}) > 0:
+                    return True
+        return False
+                
     def categorise(self, data1, data2):
         if isinstance(data1, dict):
             created, updated, deleted = {}, {}, {}
@@ -230,6 +240,15 @@ class Mongo_DBText:
     
     def make_text_client(self, *args, **kw):
         return MongoTextClient(*args, **kw)
+    
+    def wait_for_collections_empty(self, collectionName, maxTime):
+        attempts = 10
+        sleepLength = float(maxTime) / attempts
+        for _ in range(attempts):
+            if not self.text_client.has_collection(collectionName):
+                return True
+            time.sleep(sleepLength)
+        return False
     
     def wait_for_all_primary(self):
         for databaseName in self.initial_data:
