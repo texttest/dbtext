@@ -147,7 +147,11 @@ class MongoTextClient:
         if not isinstance(docObjId, str):
             return False
         
-        return not docObjId.isdigit()
+        if not docObjId.isdigit():
+            return True
+        
+        # can be a pure integer, just by chance. But should be very large if so
+        return int(docObjId) > 1000000
 
     def swap_out_ids(self, data):
         if len(data) == 0:
