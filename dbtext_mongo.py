@@ -65,7 +65,7 @@ class MongoTextClient:
                     jsonutils.dump_json_table(f, collection)
     
     @classmethod
-    def parse_data_directory(cls, rootDir):
+    def parse_data_directory(cls, rootDir, dbMapping):
         data = {}
         if os.path.isdir(rootDir):
             for dbName in os.listdir(rootDir):
@@ -74,9 +74,20 @@ class MongoTextClient:
                     if collectionFn.endswith(".json"):
                         collectionPath = os.path.join(rootDir, dbName, collectionFn)
                         docs = json.load(open(collectionPath))
+                        if dbMapping:
+                            cls.apply_mapping(docs, dbMapping)
                         dbdata[collectionFn[:-5]] = docs
                 data[dbName] = dbdata
         return data
+    
+    @classmethod
+    def apply_mapping(cls, docs, dbMapping):
+        ix = 0
+        for doc in docs:
+            for field, value in doc.items():
+                if isinstance(value, str) and value in dbMapping:
+                    doc[field] = dbMapping[value][ix]
+                    ix += 1
     
     def parse_mongo(self, ignoreDbs=None):
         data = {}
@@ -206,14 +217,14 @@ class MongoTextClient:
                 collection.insert_many(docs)
 
 class Mongo_DBText:
-    def __init__(self, port=None, **kw):
+    def __init__(self, port=None, dbMapping=None, **kw):
         self.port = port
         self.dbdir = os.path.abspath("mongo")
         if not os.path.isdir(self.dbdir):
             os.mkdir(self.dbdir)
         self.start_mongo()
         self.data_dir = os.path.abspath("mongodata")
-        self.initial_data = MongoTextClient.parse_data_directory(self.data_dir)
+        self.initial_data = MongoTextClient.parse_data_directory(self.data_dir, dbMapping)
         self.text_client = self.make_text_client(**kw)
         if self.wait_for_all_primary():
             self.text_client.insert_data(self.initial_data)
