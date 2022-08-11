@@ -5,9 +5,8 @@ Created on Dec 8, 2021
 '''
 
 import os, subprocess, json, time
-import jsonutils
+from . import jsonutils
 from threading import Thread
-import pymongo
 import shutil
 import sys
 import bson
@@ -44,7 +43,12 @@ class MongoPipeReaderThread(Thread):
 class MongoTextClient:
     ignore_db_names = [ "admin", "config", "local" ]
     def __init__(self, *args, **kw):
-        self.client = pymongo.MongoClient(*args, **kw)
+        self.client = self.make_client(*args, **kw)
+        
+    @classmethod
+    def make_client(cls, *args, **kw):
+        from pymongo import MongoClient
+        return MongoClient(*args, **kw)
         
     def run_admin_command(self, *args):
         self.client.admin.command(*args)
@@ -302,7 +306,7 @@ class LocalMongo_DBText(Mongo_DBText):
         return self.enable_transactions(self.port, self.rsId)
         
     def enable_transactions(self, port, rsId):
-        admin_client = pymongo.MongoClient("mongodb://localhost:" + str(self.port) + "/admin")
+        admin_client = MongoTextClient.make_client("mongodb://localhost:" + str(self.port) + "/admin")
         config = {'_id': rsId, 'members': [ {'_id': 0, 'host': 'localhost:' + str(port) } ]}
         admin_client.admin.command("replSetInitiate", config)
         admin_client.close()
