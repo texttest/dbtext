@@ -4,8 +4,10 @@ Currently has implementations for MS SQL server, MySQL, Sqlite3 and MongoDB.
 The first 3 of these require "pyodbc" to be installed, and MongoDB requires "pymongo" to be installed.
 
 ## installation
+```
 pip install dbtext pyodbc (for MSSQL, MySQL, Sqlite3)
 pip install dbtext pymongo (for MongoDB)
+```
 
 ## usage
 
