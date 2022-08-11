@@ -254,8 +254,8 @@ class Mongo_DBText:
     def dump_changes(self, *args, **kw):
         self.text_client.dump_changes(self.initial_data, *args, **kw)
         
-    def dump_data_directory(self):
-        self.text_client.dump_data_directory(self.data_dir)
+    def dump_data_directory(self, dump_dir=None):
+        self.text_client.dump_data_directory(dump_dir or self.data_dir)
     
     def make_text_client(self, *args, **kw):
         return MongoTextClient(*args, **kw)
@@ -334,11 +334,3 @@ class LocalMongo_DBText(Mongo_DBText):
         else:
             return shutil.which("mongod")
                                 
-                    
-if __name__ == "__main__":
-    directory = sys.argv[1] if len(sys.argv) > 1 else os.path.abspath("mongodata")
-    connStr = sys.argv[2] if len(sys.argv) > 2 else "mongodb://test:test@localhost:27017"
-    dbClient = MongoTextClient(connStr)
-    if os.path.isdir(directory):
-        shutil.rmtree(directory)
-    dbClient.dump_data_directory(directory)
