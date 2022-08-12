@@ -9,7 +9,11 @@ from . import jsonutils
 from threading import Thread
 import shutil
 import sys
-import bson
+try:
+    # comes with pymongo
+    import bson
+except ModuleNotFoundError:
+    pass
 
 class MongoPipeReaderThread(Thread):
     def __init__(self, proc):
