@@ -315,12 +315,12 @@ class DBText:
         ttcnxn.close()
     
     def append_to_sql_query(self, column_tuple):
-        if column_tuple[1] in [ "datetime", "image", "varbinary" ]:
-            return "%s" % column_tuple[0]
-        elif column_tuple[1] in [ "binary", "timestamp" ]:
-            return "master.sys.fn_varbintohexstr(%s)" % column_tuple[0]
+        column_name, column_type = column_tuple
+        quoted_column_name = self.quote(str(column_name))
+        if column_type in [ "binary", "timestamp" ]:
+            return "master.sys.fn_varbintohexstr(%s)" % quoted_column_name
         else:
-            return str(column_tuple[0])
+            return quoted_column_name
 
     def get_row_data(self, row, column_names, col_name):
         for i, (name, _) in enumerate(column_names):
