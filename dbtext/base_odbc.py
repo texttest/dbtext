@@ -14,6 +14,7 @@ from fnmatch import fnmatch
 from . import jsonutils
 from datetime import datetime, date
 import json
+import logging
 try:
     import pyodbc
 except ModuleNotFoundError:
@@ -32,13 +33,13 @@ class DBText:
         self.iscreated = master_connection is not None
         self.isconnected = False
         self.startrv = ""
-    
+        self.logger = logging.getLogger("dbtext")
         # user master because attach detach
         try:
             self.cnxn = master_connection or self.make_connection("master")
             self.isconnected = True
         except pyodbc.Error as e:
-            print("Unexpected error for db " + database + ":", e)
+            self.logger.error("Unexpected error for db " + database + ":", e)
             raise
         
     def get_create_db_args(self, **kw):
@@ -53,30 +54,35 @@ class DBText:
             attachsql = "CREATE DATABASE " + self.quote(self.database_name) + self.get_create_db_args(**kw) + ";"
             self.query(attachsql)
         except pyodbc.Error as e:
-            print(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
+            self.logger.error(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
             raise
 
     def populate_empty_db(self, sqlfile, tables_dir=None, encoding=None):
         try:
             self.iscreated = True
             with self.make_connection(self.database_name) as ttcxn:
-                if sqlfile and os.path.isfile(sqlfile):
-                    self.read_sql_file(ttcxn, sqlfile, encoding)
+                if sqlfile:
+                    if os.path.isfile(sqlfile):
+                        self.read_sql_file(ttcxn, sqlfile, encoding)
+                    else:
+                        self.logger.warning(f"sqlfile {sqlfile} not found")
 
                 tables_dir = tables_dir or self.get_tables_dir_name()
                 if os.path.isdir(tables_dir):
                     self.read_tables_dir(ttcxn, tables_dir)
+                else:
+                    self.logger.warning(f"No data folder found for database {tables_dir}")
 
                 self.readrv(ttcxn)
         except pyodbc.Error as e:
-            print(f"Unexpected error for populate empty db {self.database_name}:\n", e)
+            self.logger.error(f"Unexpected error for populate empty db {self.database_name}:\n", e)
             raise
 
     def execute_setup_query(self, ttcxn, currQuery):
         try:
             ttcxn.cursor().execute(currQuery)
         except pyodbc.Error:
-            print("Failed to execute query:\n" + repr(currQuery))
+            self.logger.error("Failed to execute query:\n" + repr(currQuery))
             raise
             
     def read_sql_file(self, ttcxn, sqlfile, encoding=None):
@@ -105,12 +111,11 @@ class DBText:
         if currQuery.strip():
             self.execute_setup_query(ttcxn, currQuery)
 
-    def read_tables_dir(self, ttcxn, tables_dir_name, verbose=False):
+    def read_tables_dir(self, ttcxn, tables_dir_name):
         failedFiles = []
         for tableFile in glob(os.path.join(tables_dir_name, "*.table")) + glob(os.path.join(tables_dir_name, "*.json")):
             try:
-                if verbose:
-                    print("Reading data from", tableFile)
+                self.logger.debug("Reading data from", tableFile)
                 self.add_table_data(tableFile, ttcxn)
             except pyodbc.IntegrityError as ex:
                 fk_constraint_string = "FOREIGN KEY constraint"
@@ -239,7 +244,7 @@ class DBText:
             with self.make_connection(self.database_name) as ttcxn:
                 self.readrv(ttcxn)
         except pyodbc.Error as e:
-            print("Unexpected error for update rv " + self.database_name + ":", e)
+            self.logger.error("Unexpected error for update rv " + self.database_name + ":", e)
             pass
     
     def cursor(self):
@@ -258,7 +263,7 @@ class DBText:
         try:
             self.single()
         except pyodbc.Error:
-            print("Failed to go into single user mode.")
+            self.logger.warning("Failed to go into single user mode.")
         try:
             self.query(q)
         finally:
@@ -277,7 +282,7 @@ class DBText:
                 self.query("DROP DATABASE " + self.database_name + ";")
                 self.iscreated = False
             except pyodbc.Error as e:
-                print("Unexpected error for drop db " + self.database_name + ":", e)
+                self.logger.warning("Unexpected error for drop db " + self.database_name + ":", e)
                
     def get_connection_string(self, driver=True):
         connstr = self.connectionStringTemplate % self.database_name
@@ -401,7 +406,7 @@ class DBText:
         table_data = {}
         with self.make_connection(self.database_name) as ttcxn:
             for tablespec, constraint in subset_data:
-                print("Getting data for table(s)", repr(tablespec), ",", repr(constraint))
+                self.logger.info("Getting data for table(s)", repr(tablespec), ",", repr(constraint))
                 rows, colnames = self.extract_data_for_dump(ttcxn, tablespec, constraint)
                 if len(rows) > 0:
                     self.store_table_data(table_data, tablespec, rows, colnames)
@@ -435,7 +440,7 @@ class DBText:
                     
     def write_all_tables(self, table_file_pattern, blob_pattern, ttcxn, exclude=""):
         for tablename in self.expand_table_names(ttcxn, "*", exclude):
-            print("Making file for table", repr(tablename))
+            self.logger.debug("Making file for table", repr(tablename))
             self.dumptable(ttcxn, tablename, "", table_file_pattern, blob_pattern)
 
     def write_data(self, writeDir, use_master_connection=False, json_format=False, **kw):
@@ -530,6 +535,7 @@ class DBText:
 
     def dumpchanges(self, table_fn_pattern, tables_dir=None, exclude=""):
         tables_dir = tables_dir or self.get_tables_dir_name()
+        self.logger.info(f"will dump changes compared with tables_dir {tables_dir}")
         created, updated, deleted = {}, {}, {}
         with self.make_connection(self.database_name) as ttcxn:
             for tableName in self.expand_table_names(ttcxn, "*", exclude):
