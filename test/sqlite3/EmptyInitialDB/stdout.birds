@@ -1,0 +1,6 @@
+testing against Sqlite3 database
+No data folder found for database db_tables
+connecting to database with str sqlite:///db_4896.db
+Loading observations
+loading {'date': '2022-08-06', 'type': 'insect', 'name': 'mosquito'}
+loading {'date': '2022-08-06', 'type': 'bird', 'name': 'woodpecker'}

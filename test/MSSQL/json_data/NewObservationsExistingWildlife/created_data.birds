@@ -1,0 +1,32 @@
+observations: [
+  {
+    "date": "2022-08-01",
+    "internalId": 1,
+    "wildlifeId": 3
+  },
+  {
+    "date": "2022-08-02",
+    "internalId": 2,
+    "wildlifeId": 4
+  },
+  {
+    "date": "2022-08-02",
+    "internalId": 3,
+    "wildlifeId": 1
+  },
+  {
+    "date": "2022-08-02",
+    "internalId": 4,
+    "wildlifeId": 2
+  },
+  {
+    "date": "2022-08-04",
+    "internalId": 5,
+    "wildlifeId": 2
+  },
+  {
+    "date": "2022-08-05",
+    "internalId": 6,
+    "wildlifeId": 3
+  }
+]

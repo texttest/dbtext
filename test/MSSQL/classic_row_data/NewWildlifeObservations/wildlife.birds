@@ -1,0 +1,24 @@
+ROW:0
+   internalId: 1
+   name: Blackbird
+   type: bird
+ROW:1
+   internalId: 2
+   name: Magpie
+   type: bird
+ROW:2
+   internalId: 3
+   name: Bumblebee
+   type: insect
+ROW:3
+   internalId: 4
+   name: Wasp
+   type: insect
+ROW:4
+   internalId: 5
+   name: mosquito
+   type: insect
+ROW:5
+   internalId: 6
+   name: woodpecker
+   type: bird

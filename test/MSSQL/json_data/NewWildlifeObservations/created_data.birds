@@ -1,0 +1,24 @@
+observations: [
+  {
+    "date": "2022-08-06",
+    "internalId": 1,
+    "wildlifeId": 5
+  },
+  {
+    "date": "2022-08-06",
+    "internalId": 2,
+    "wildlifeId": 6
+  }
+]
+wildlife: [
+  {
+    "internalId": 5,
+    "name": "mosquito",
+    "type": "insect"
+  },
+  {
+    "internalId": 6,
+    "name": "woodpecker",
+    "type": "bird"
+  }
+]

@@ -1,0 +1,8 @@
+testing against MSSQL database
+Loading observations
+loading {'date': '2022-08-01', 'type': 'insect', 'name': 'bumblebee'}
+loading {'date': '2022-08-02', 'type': 'insect', 'name': 'wasp'}
+loading {'date': '2022-08-02', 'type': 'bird', 'name': 'blackbird'}
+loading {'date': '2022-08-02', 'type': 'bird', 'name': 'magpie'}
+loading {'date': '2022-08-04', 'type': 'bird', 'name': 'magpie'}
+loading {'date': '2022-08-05', 'type': 'insect', 'name': 'bumblebee'}

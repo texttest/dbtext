@@ -1,0 +1,22 @@
+[
+  {
+    "internalId": 1,
+    "name": "Blackbird",
+    "type": "bird"
+  },
+  {
+    "internalId": 2,
+    "name": "Magpie",
+    "type": "bird"
+  },
+  {
+    "internalId": 3,
+    "name": "Bumblebee",
+    "type": "insect"
+  },
+  {
+    "internalId": 4,
+    "name": "Wasp",
+    "type": "insect"
+  }
+]

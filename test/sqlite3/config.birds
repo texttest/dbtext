@@ -1,0 +1,4 @@
+
+[run_dependent_text]
+stdout:db_\d+\.db{REPLACE db_id.db}
+catalogue:db_\d+\.db{REPLACE db_id.db}
