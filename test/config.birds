@@ -15,12 +15,6 @@ copy_test_path:db_tables
 create_catalogues:true
 
 [collate_file]
-wildlife:db_wildlife.dbtext
-observations:db_observations.dbtext
-# note: normally you'd either collate the .dbtext files or the .json files, not both!
-wildlife:db_wildlife.json
-observations:db_observations.json
-updated_data:updated.json
-created_data:created.json
-deleted_data:deleted.json
+*_rowdata:db_*.dbtext
+*_json:*.json
 [end]

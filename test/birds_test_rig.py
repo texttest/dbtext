@@ -66,9 +66,9 @@ def main(database_type, text_format, updates_only):
         else:
             extension = "dbtext"
         if updates_only:
-            db.dumpchanges("{type}.json", exclude="trace*")
+            db.dumpchanges("{type}.json", exclude="trace*,sqlite*")
         else:
-            db.dumptables(extension, "*", exclude="trace*", usemaxcol="")
+            db.dumptables(extension, "*", exclude="trace*,sqlite*", usemaxcol="")
 
 if __name__ == "__main__":
     main()
