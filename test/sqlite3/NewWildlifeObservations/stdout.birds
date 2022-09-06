@@ -1,5 +1,5 @@
 testing against Sqlite3 database
-connecting to database with str sqlite:///db_10416.db
+connecting to database with str sqlite:///db_3644.db
 Loading observations
 loading {'date': '2022-08-06', 'type': 'insect', 'name': 'mosquito'}
 loading {'date': '2022-08-06', 'type': 'bird', 'name': 'woodpecker'}

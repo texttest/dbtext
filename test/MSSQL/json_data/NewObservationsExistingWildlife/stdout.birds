@@ -6,3 +6,4 @@ loading {'date': '2022-08-02', 'type': 'bird', 'name': 'blackbird'}
 loading {'date': '2022-08-02', 'type': 'bird', 'name': 'magpie'}
 loading {'date': '2022-08-04', 'type': 'bird', 'name': 'magpie'}
 loading {'date': '2022-08-05', 'type': 'insect', 'name': 'bumblebee'}
+will dump changes compared with tables_dir db_tables

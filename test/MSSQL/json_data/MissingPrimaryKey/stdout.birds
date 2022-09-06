@@ -1,0 +1,5 @@
+testing against MSSQL database
+source data file db_tables\wildlife.json did not contain primary keys for every record, adding them
+Loading observations
+will dump changes compared with tables_dir db_tables
+source data file db_tables\wildlife.json did not contain primary keys for every record, adding them

@@ -2,3 +2,4 @@ testing against MSSQL database
 Loading observations
 loading {'date': '2022-08-06', 'type': 'insect', 'name': 'mosquito'}
 loading {'date': '2022-08-06', 'type': 'bird', 'name': 'woodpecker'}
+will dump changes compared with tables_dir db_tables

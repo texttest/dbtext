@@ -30,8 +30,8 @@ db_names = ["MySql", "MSSQL", "Sqlite3"]
 def main(database_type, text_format, updates_only):
     handler = logging.StreamHandler(sys.stdout)
     logging.getLogger().addHandler(handler)
-    dbtext_logger = logging.getLogger("ddbtext")
-    dbtext_logger.setLevel(logging.DEBUG)
+    dbtext_logger = logging.getLogger("dbtext")
+    dbtext_logger.setLevel(logging.INFO)
     logger = logging.getLogger("birds_test_rig")
     logger.setLevel(logging.INFO)
 

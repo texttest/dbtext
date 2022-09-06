@@ -1,2 +1,3 @@
 testing against MSSQL database
 Loading observations
+will dump changes compared with tables_dir db_tables

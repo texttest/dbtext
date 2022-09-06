@@ -71,7 +71,7 @@ class DBText:
                 if os.path.isdir(tables_dir):
                     self.read_tables_dir(ttcxn, tables_dir)
                 else:
-                    self.logger.warning(f"No data folder found for database {tables_dir}")
+                    self.logger.info(f"No data folder found for database {tables_dir}")
 
                 self.readrv(ttcxn)
         except pyodbc.Error as e:
@@ -115,17 +115,19 @@ class DBText:
         failedFiles = []
         for tableFile in glob(os.path.join(tables_dir_name, "*.table")) + glob(os.path.join(tables_dir_name, "*.json")):
             try:
-                self.logger.debug("Reading data from", tableFile)
+                self.logger.debug(f"Loading data from {tableFile}")
                 self.add_table_data(tableFile, ttcxn)
             except pyodbc.IntegrityError as ex:
                 fk_constraint_string = "FOREIGN KEY constraint"
                 if fk_constraint_string in ex.args[1]:
+                    self.logger.debug(f"error when loading data for table {tableFile}: {fk_constraint_string}, will retry this table later")
                     failedFiles.append(tableFile)
                 else:
                     raise ex
                 
         # Things often fail due to constraints, insert everything else and then try them again
         for tableFile in failedFiles:
+            self.logger.debug(f"retrying data insert for table {tableFile}")
             self.add_table_data(tableFile, ttcxn)
               
     @classmethod
@@ -194,9 +196,18 @@ class DBText:
         else:
             return value
     
-    def parse_table_file_to_rowdicts(self, fn):
+    def parse_table_file_to_rowdicts(self, fn, primaryKeys):
         if fn.endswith(".json"):
-            return json.load(open(fn))
+            with open(fn, "r") as f:
+                json_table_data = json.load(f)
+                ids = [self.evaluate_primary_key(primaryKeys, row_data) for row_data in json_table_data]
+                if len(primaryKeys) == 1 and () in ids:
+                    self.logger.info(f"source data file {fn} did not contain primary keys for every record, adding them")
+                    for i, row_data in enumerate(json_table_data):
+                        for pk in primaryKeys:
+                            if not pk in row_data:
+                                row_data[pk] = i
+                return json_table_data
         else:
             tablesDir = os.path.dirname(fn)
             rows = []
@@ -208,10 +219,12 @@ class DBText:
             return rows
         
     def add_table_data(self, fn, ttcxn):
-        rowData = self.parse_table_file_to_rowdicts(fn)
         table_name = os.path.basename(fn).rsplit(".", 1)[0]
+        pkeys = self.get_primary_key_columns(ttcxn, table_name)
+        rowData = self.parse_table_file_to_rowdicts(fn, pkeys)
         for currRowDict in rowData:
-            self.insert_row(ttcxn, table_name, currRowDict)
+            contains_pk_value = len(self.evaluate_primary_key(pkeys, currRowDict)) > 0
+            self.insert_row(ttcxn, table_name, currRowDict, identity_insert=contains_pk_value)
           
     def insert_row(self, ttcxn, table_name, data, identity_insert=False):
         if not data:
@@ -230,13 +243,14 @@ class DBText:
             ttcxn.cursor().execute(sql, *list(data.values()))
         except pyodbc.DatabaseError as e:
             if "Cannot insert explicit value for identity column" in str(e):
+                self.logger.debug("Error when inserting data: 'Cannot insert explicit value for identity column'. "
+                                  "Will retry with IDENTITY_INSERT")
                 return self.insert_row(ttcxn, table_name, data, identity_insert=True)
             elif "conflicted with the FOREIGN KEY constraint" in str(e):
                 raise
             else:
                 from pprint import pformat
-                sys.stderr.write("Failed to insert data into " + table_name + ":\n")
-                sys.stderr.write(pformat(data) + "\n")
+                self.logger.error("Failed to insert data into " + table_name + ":\n" + pformat(data) + "\n")
                 raise
 
     def update_start_rv(self):
@@ -493,11 +507,14 @@ class DBText:
                 self.dumptable(ttcxn, tablename, constraint, table_fn_pattern, blob_patterns, dumpableBlobs)
                 
     def get_primary_key_columns(self, ttcxn, tableName):
-        return tuple([ info[3] for info in ttcxn.cursor().primaryKeys(tableName) ])
+        # Sqlite3 cursor doesn't have 'primaryKeys' attribute
+        if hasattr(ttcxn.cursor(), "primaryKeys"):
+            return tuple([ info[3] for info in ttcxn.cursor().primaryKeys(tableName) ])
+        return ()
         
     def evaluate_primary_key(self, pkeys, row_data):
-        return tuple(row_data[key] for key in pkeys)
-        
+        return tuple(row_data[key] for key in pkeys if key in row_data)
+
     def categorise(self, data1, data2, pkeys):
         created, updated, deleted = [], [], []
         
@@ -539,12 +556,13 @@ class DBText:
         created, updated, deleted = {}, {}, {}
         with self.make_connection(self.database_name) as ttcxn:
             for tableName in self.expand_table_names(ttcxn, "*", exclude):
+                self.logger.debug(f"examining changes in table {tableName}")
                 rows, colinfo = self.extract_data_for_dump(ttcxn, tableName, "")
-                tableFile = os.path.join(tables_dir, tableName + ".json")
-                initial_table_data = self.parse_table_file_to_rowdicts(tableFile) if os.path.isfile(tableFile) else []
+                tableFile = os.path.join(tables_dir, tableName + ".json") # TODO: make this also work with rowdata in other format
                 pkeys = self.get_primary_key_columns(ttcxn, tableName)
-                table_data = self.convert_to_row_dicts(rows, colinfo)
-                c, u, d = self.categorise(initial_table_data, table_data, pkeys)
+                initial_table_data = self.parse_table_file_to_rowdicts(tableFile, pkeys) if os.path.isfile(tableFile) else []
+                final_table_data = self.convert_to_row_dicts(rows, colinfo)
+                c, u, d = self.categorise(initial_table_data, final_table_data, pkeys)
                 if c:
                     created[tableName] = c
                 if u:
