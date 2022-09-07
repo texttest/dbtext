@@ -223,8 +223,7 @@ class DBText:
         pkeys = self.get_primary_key_columns(ttcxn, table_name)
         rowData = self.parse_table_file_to_rowdicts(fn, pkeys)
         for currRowDict in rowData:
-            contains_pk_value = len(self.evaluate_primary_key(pkeys, currRowDict)) > 0
-            self.insert_row(ttcxn, table_name, currRowDict, identity_insert=contains_pk_value)
+            self.insert_row(ttcxn, table_name, currRowDict)
           
     def insert_row(self, ttcxn, table_name, data, identity_insert=False):
         if not data:
