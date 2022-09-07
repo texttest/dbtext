@@ -255,8 +255,17 @@ class Mongo_DBText:
     def start_mongo(self):
         pass
     
-    def dump_changes(self, *args, **kw):
-        self.text_client.dump_changes(self.initial_data, *args, **kw)
+    def filter_initial_data(self, ignore_dbs):
+        cmp_data = {}
+        ignore_dbs_lower = [ db.lower() for db in ignore_dbs ]
+        for db, dbdata in self.initial_data.items():
+            if db.lower() not in ignore_dbs_lower:
+                cmp_data[db] = dbdata
+        return cmp_data
+    
+    def dump_changes(self, ext, ignore_dbs=None):
+        cmp_data = self.filter_initial_data(ignore_dbs) if ignore_dbs else self.initial_data
+        self.text_client.dump_changes(cmp_data, ext, ignore_dbs)
         
     def dump_data_directory(self, dump_dir=None):
         self.text_client.dump_data_directory(dump_dir or self.data_dir)
