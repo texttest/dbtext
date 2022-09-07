@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "C:\Users\Administrator\workspace\dbtext\test\birds_test_rig.py", line 74, in <module>
+    main()
+  File "C:\Users\Administrator\workspace\dbtext\venv\lib\site-packages\click\core.py", line 1130, in __call__
+    return self.main(*args, **kwargs)
+  File "C:\Users\Administrator\workspace\dbtext\venv\lib\site-packages\click\core.py", line 1055, in main
+    rv = self.invoke(ctx)
+  File "C:\Users\Administrator\workspace\dbtext\venv\lib\site-packages\click\core.py", line 1404, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "C:\Users\Administrator\workspace\dbtext\venv\lib\site-packages\click\core.py", line 760, in invoke
+    return __callback(*args, **kwargs)
+  File "C:\Users\Administrator\workspace\dbtext\test\birds_test_rig.py", line 50, in main
+    db.create(sqlfile="empty_db.sql")
+  File "c:\users\administrator\workspace\dbtext\dbtext\base_odbc.py", line 50, in create
+    self.populate_empty_db(sqlfile, tables_dir, encoding)
+  File "c:\users\administrator\workspace\dbtext\dbtext\base_odbc.py", line 68, in populate_empty_db
+    raise ValueError(f"file {sqlfile} not found")
+ValueError: file empty_db.sql not found

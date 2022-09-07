@@ -65,7 +65,7 @@ class DBText:
                     if os.path.isfile(sqlfile):
                         self.read_sql_file(ttcxn, sqlfile, encoding)
                     else:
-                        self.logger.warning(f"sqlfile {sqlfile} not found")
+                        raise ValueError(f"file {sqlfile} not found")
 
                 tables_dir = tables_dir or self.get_tables_dir_name()
                 if os.path.isdir(tables_dir):

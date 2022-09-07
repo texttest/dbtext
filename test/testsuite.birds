@@ -1,3 +1,6 @@
+# Schema file is missing - this should be the error you see clearly
+MissingSchema
+
 # using database engine MSSQL
 MSSQL
 sqlite3
