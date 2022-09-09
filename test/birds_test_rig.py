@@ -27,7 +27,13 @@ db_names = ["MySql", "MSSQL", "Sqlite3"]
     default=False,
     help="print updates only - if you don't set this then the whole database is printed"
 )
-def main(database_type, text_format, updates_only):
+@click.option(
+    "--dump-only",
+    is_flag=True,
+    default=False,
+    help="don't initialize the db - only dump changes"
+)
+def main(database_type, text_format, updates_only, dump_only):
     handler = logging.StreamHandler(sys.stdout)
     logging.getLogger().addHandler(handler)
     dbtext_logger = logging.getLogger("dbtext")
@@ -46,10 +52,12 @@ def main(database_type, text_format, updates_only):
 
     testdbname = "db_" + str(os.getpid())  # temporary name not to clash with other tests
     with dbtext_engine(testdbname) as db:
-        # Arrange
+        if dump_only:
+            db.dumpchanges("{type}.json", exclude="trace*,sqlite*")
+            return
+
         db.create(sqlfile="empty_db.sql")
 
-        # Act
         if database_type == "Sqlite3":
             conn_str = f'sqlite:///{testdbname}.db'
             logger.info(f"connecting to database with str {conn_str}")
@@ -60,7 +68,6 @@ def main(database_type, text_format, updates_only):
 
         load_observations("observations.csv", engine)
 
-        # Assert
         if text_format == "json":
             extension = "json"
         else:

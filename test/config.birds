@@ -1,5 +1,6 @@
 # Full path to the System Under Test (or Java Main Class name)
 executable:${TEXTTEST_ROOT}/birds_test_rig.py
+#interpreter:python -m cProfile -o profile.stats
 
 
 # Naming scheme to use for files for stdin,stdout and stderr
@@ -17,4 +18,10 @@ create_catalogues:true
 [collate_file]
 *_rowdata:db_*.dbtext
 *_json:*.json
+stats:profile.stats
+[end]
+
+[run_dependent_text]
+stderr:Traceback (most recent call last):{->}\s+raise\s
+stdout:db_\d+{REPLACE db_name}
 [end]

@@ -1,5 +1,6 @@
 # Schema file is missing - this should be the error you see clearly
 MissingSchema
+MissingCreate
 
 # using database engine MSSQL
 MSSQL

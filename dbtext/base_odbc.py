@@ -28,26 +28,28 @@ class DBText:
     connectionStringTemplate = None
     enforceVersion = None
     def __init__(self, database=None, master_connection=None):
-        self.maxval = {}
+        self.logger = logging.getLogger("dbtext")
         self.database_name = database
+        self.master_connection = master_connection
+        self.maxval = {}
         self.iscreated = master_connection is not None
         self.isconnected = False
         self.startrv = ""
-        self.logger = logging.getLogger("dbtext")
-        # user master because attach detach
-        try:
-            self.cnxn = master_connection or self.make_connection("master")
-            self.isconnected = True
-        except pyodbc.Error as e:
-            self.logger.error("Unexpected error for db " + database + ":", e)
-            raise
+
         
     def get_create_db_args(self, **kw):
         return ""
         
     def create(self, sqlfile=None, encoding=None, tables_dir=None, **kw):
+        try:
+            self.cnxn = self.master_connection or self.make_connection("master")
+            self.isconnected = True
+        except pyodbc.Error as e:
+            self.logger.error(f"Unexpected error opening connection to db {self.database_name}: %s", e)
+            raise
         self.create_empty_db(**kw)
         self.populate_empty_db(sqlfile, tables_dir, encoding)
+
 
     def create_empty_db(self, **kw):
         try:
@@ -490,6 +492,9 @@ class DBText:
         return []
 
     def dumptables(self, sut_ext, table_str, usemaxcol='rv', exclude="", dumpwholenamestr="", dumpableBlobs=True):
+        if not self.isconnected:
+            self.logger.info(f"unable to dump tables for {self.database_name}, it is not created yet.")
+            return
         dumpwholenames = dumpwholenamestr.split(',')
         with self.make_connection(self.database_name) as ttcxn:
             for descname in self.expand_table_names(ttcxn, table_str, exclude):
@@ -550,6 +555,9 @@ class DBText:
         return table_data
 
     def dumpchanges(self, table_fn_pattern, tables_dir=None, exclude=""):
+        if not self.isconnected:
+            self.logger.info(f"unable to dump tables for {self.database_name}, it is not created yet.")
+            return
         tables_dir = tables_dir or self.get_tables_dir_name()
         self.logger.info(f"will dump changes compared with tables_dir {tables_dir}")
         created, updated, deleted = {}, {}, {}
