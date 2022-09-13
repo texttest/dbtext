@@ -17,7 +17,7 @@ def json_serial(obj):
 
 
 def dump_json_table(f, collection):
-    f.write(json.dumps(collection, indent=2, sort_keys=False, default=json_serial) + "\n")
+    f.write(json.dumps(collection, indent=2, sort_keys=True, default=json_serial) + "\n")
 
 def dump_json_tables(data, fn):
     with open(fn, "w") as f:
