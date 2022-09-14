@@ -385,8 +385,6 @@ class DBText:
         
     def get_tables_dir_name(self, json_format=False):
         prefix = self.database_name.split("db_")[0]
-        if json_format:
-            return prefix
         postfix = "db_tables"
         if prefix in [ "tt", "database" ]:
             return postfix
@@ -455,13 +453,13 @@ class DBText:
                     
     def write_all_tables(self, table_file_pattern, blob_pattern, ttcxn, exclude=""):
         for tablename in self.expand_table_names(ttcxn, "*", exclude):
-            self.logger.debug("Making file for table", repr(tablename))
+            self.logger.debug("Making file for table %s", repr(tablename))
             self.dumptable(ttcxn, tablename, "", table_file_pattern, blob_pattern)
 
     def write_data(self, writeDir, use_master_connection=False, json_format=False, **kw):
         table_file_pattern, blob_pattern = self.make_empty_tables_dir(writeDir, json_format)
         if use_master_connection:
-            self.write_all_tables(table_file_pattern, blob_pattern, self.cnxn, **kw)
+            self.write_all_tables(table_file_pattern, blob_pattern, self.master_connection, **kw)
         else:
             with self.make_connection(self.database_name) as ttcxn:
                 self.write_all_tables(table_file_pattern, blob_pattern, ttcxn, **kw)

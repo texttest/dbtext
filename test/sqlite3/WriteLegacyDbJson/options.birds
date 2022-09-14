@@ -1,0 +1,1 @@
+--write-db legacy.db --text-format json

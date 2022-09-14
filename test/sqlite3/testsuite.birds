@@ -1,3 +1,5 @@
 # Copy of NewWildlifeObservations
 NewWildlifeObservations
 EmptyInitialDB
+WriteLegacyDbJson
+WriteLegacyDbRowdata

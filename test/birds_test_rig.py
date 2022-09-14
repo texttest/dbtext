@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import sqlite3
+
 import sqlalchemy
 
 import dbtext, os, sys
@@ -33,13 +35,25 @@ db_names = ["MySql", "MSSQL", "Sqlite3"]
     default=False,
     help="don't initialize the db - only dump changes"
 )
-def main(database_type, text_format, updates_only, dump_only):
+@click.option(
+    "--write-db",
+    default=None,
+    help="don't run the birds and insects thing, write the contents of the db given. At present is assumes sqlite3."
+)
+def main(database_type, text_format, updates_only, dump_only, write_db):
     handler = logging.StreamHandler(sys.stdout)
     logging.getLogger().addHandler(handler)
     dbtext_logger = logging.getLogger("dbtext")
     dbtext_logger.setLevel(logging.INFO)
     logger = logging.getLogger("birds_test_rig")
     logger.setLevel(logging.INFO)
+
+    if write_db:
+        with sqlite3.connect(write_db) as conn:
+            testdb = dbtext.Sqlite3_DBText("", conn)
+            use_json = text_format == "json"
+            testdb.write_data(".", use_master_connection=True, json_format=use_json)
+        return
 
     logger.info(f"testing against {database_type} database")
 

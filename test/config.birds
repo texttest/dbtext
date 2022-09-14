@@ -12,6 +12,7 @@ full_name:Birds and Insects
 copy_test_path:observations.csv
 copy_test_path:empty_db.sql
 copy_test_path:db_tables
+copy_test_path:legacy.db
 
 create_catalogues:true
 
@@ -19,6 +20,8 @@ create_catalogues:true
 *_rowdata:db_*.dbtext
 *_json:*.json
 stats:profile.stats
+db_tables_*_table:db_tables/*.table
+db_tables_*_json:db_tables/*.json
 [end]
 
 [run_dependent_text]
