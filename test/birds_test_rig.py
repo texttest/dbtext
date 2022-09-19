@@ -52,7 +52,7 @@ def main(database_type, text_format, updates_only, dump_only, write_db):
         with sqlite3.connect(write_db) as conn:
             testdb = dbtext.Sqlite3_DBText("", conn)
             use_json = text_format == "json"
-            testdb.write_data(".", use_master_connection=True, json_format=use_json)
+            testdb.write_data("legacy_db", use_master_connection=True, json_format=use_json)
         return
 
     logger.info(f"testing against {database_type} database")

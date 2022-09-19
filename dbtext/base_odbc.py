@@ -385,6 +385,8 @@ class DBText:
         
     def get_tables_dir_name(self, json_format=False):
         prefix = self.database_name.split("db_")[0]
+        if json_format:
+            return prefix
         postfix = "db_tables"
         if prefix in [ "tt", "database" ]:
             return postfix

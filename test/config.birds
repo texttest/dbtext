@@ -22,6 +22,8 @@ create_catalogues:true
 stats:profile.stats
 db_tables_*_table:db_tables/*.table
 db_tables_*_json:db_tables/*.json
+legacy_db_*_json:legacy_db/*.json
+legacy_db_*_table:legacy_db/db_tables/*.table
 [end]
 
 [run_dependent_text]
