@@ -29,4 +29,5 @@ legacy_db_*_table:legacy_db/db_tables/*.table
 [run_dependent_text]
 stderr:Traceback (most recent call last):{->}\s+raise\s
 stdout:db_\d+{REPLACE db_name}
+stdout:Unable to open the physical file
 [end]

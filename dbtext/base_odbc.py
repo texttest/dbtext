@@ -35,21 +35,19 @@ class DBText:
         self.iscreated = master_connection is not None
         self.isconnected = False
         self.startrv = ""
-
-        
-    def get_create_db_args(self, **kw):
-        return ""
-        
-    def create(self, sqlfile=None, encoding=None, tables_dir=None, **kw):
         try:
             self.cnxn = self.master_connection or self.make_connection("master")
             self.isconnected = True
         except pyodbc.Error as e:
             self.logger.error(f"Unexpected error opening connection to db {self.database_name}: %s", e)
             raise
+        
+    def get_create_db_args(self, **kw):
+        return ""
+        
+    def create(self, sqlfile=None, encoding=None, tables_dir=None, **kw):
         self.create_empty_db(**kw)
         self.populate_empty_db(sqlfile, tables_dir, encoding)
-
 
     def create_empty_db(self, **kw):
         try:
@@ -492,7 +490,7 @@ class DBText:
         return []
 
     def dumptables(self, sut_ext, table_str, usemaxcol='rv', exclude="", dumpwholenamestr="", dumpableBlobs=True):
-        if not self.isconnected:
+        if not self.iscreated:
             self.logger.info(f"unable to dump tables for {self.database_name}, it is not created yet.")
             return
         dumpwholenames = dumpwholenamestr.split(',')
@@ -555,7 +553,7 @@ class DBText:
         return table_data
 
     def dumpchanges(self, table_fn_pattern, tables_dir=None, exclude=""):
-        if not self.isconnected:
+        if not self.iscreated:
             self.logger.info(f"unable to dump tables for {self.database_name}, it is not created yet.")
             return
         tables_dir = tables_dir or self.get_tables_dir_name()

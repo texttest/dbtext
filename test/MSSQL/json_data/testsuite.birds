@@ -10,3 +10,6 @@ NewWildlifeObservations
 # Copy of LoadDuplicateObservations
 LoadDuplicateObservations
 MissingPrimaryKey
+
+# Copy of MissingCreate
+CleanLeakedDb

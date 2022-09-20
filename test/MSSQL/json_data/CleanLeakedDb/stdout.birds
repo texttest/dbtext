@@ -1,0 +1,6 @@
+testing against MSSQL database
+No data folder found for database birdsdb_tables
+Loading observations
+loading {'date': '2022-08-06', 'type': 'insect', 'name': 'mosquito'}
+Searching for temporary databases...
+Dropping temporary database birdsdb_48248
