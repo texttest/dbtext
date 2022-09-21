@@ -225,12 +225,12 @@ class MongoTextClient:
                 collection.insert_many(docs)
 
 class Mongo_DBText:
-    def __init__(self, port=None, dbMapping=None, **kw):
+    def __init__(self, port=None, dbMapping=None, transactions=True, **kw):
         self.port = port
         self.dbdir = os.path.abspath("mongo")
         if not os.path.isdir(self.dbdir):
             os.mkdir(self.dbdir)
-        self.start_mongo()
+        self.start_mongo(transactions)
         self.data_dir = os.path.abspath("mongodata")
         self.initial_data = MongoTextClient.parse_data_directory(self.data_dir, dbMapping)
         self.text_client = self.make_text_client(**kw)
@@ -252,7 +252,7 @@ class Mongo_DBText:
     def setup_succeeded(self):
         return self.text_client is not None
     
-    def start_mongo(self):
+    def start_mongo(self, *args):
         pass
     
     def filter_initial_data(self, ignore_dbs):
@@ -303,27 +303,31 @@ class Mongo_DBText:
         
 class LocalMongo_DBText(Mongo_DBText):
     mongo_exe = None
-    def start_mongo(self):
+    def start_mongo(self, transactions):
         if not self.set_mongo_exe():
             raise RuntimeError("Could not find MongoDB, have you installed it?")
 
         # must use replica set to allow transactions. Use unique one based on process id
-        self.rsId = "rs" + str(os.getpid())
-        cmdArgs = [ self.mongo_exe, "--port", "0", "--dbpath", self.dbdir, "--replSet", self.rsId, "--quiet" ]
+        self.rsId = None
+        cmdArgs = [ self.mongo_exe, "--port", "0", "--dbpath", self.dbdir, "--quiet" ]
+        if transactions:
+            self.rsId = "rs" + str(os.getpid())
+            cmdArgs += [ "--replSet", self.rsId ]
         self.proc = subprocess.Popen(cmdArgs, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         self.pipeThread = MongoPipeReaderThread(self.proc)
         self.pipeThread.start()
 
     def make_text_client(self):
         self.port = self.pipeThread.wait_for_port()
-        return self.enable_transactions(self.port, self.rsId)
+        if self.rsId:
+            self.enable_transactions(self.port, self.rsId)
+        return MongoTextClient("localhost", self.port)
         
     def enable_transactions(self, port, rsId):
         admin_client = MongoTextClient.make_client("mongodb://localhost:" + str(self.port) + "/admin")
         config = {'_id': rsId, 'members': [ {'_id': 0, 'host': 'localhost:' + str(port) } ]}
         admin_client.admin.command("replSetInitiate", config)
         admin_client.close()
-        return MongoTextClient("localhost", self.port)
         
     def drop(self):
         self.pipeThread.terminate()
