@@ -16,11 +16,11 @@ def json_serial(obj):
         return str(obj)
 
 
-def dump_json_table(f, collection):
-    f.write(json.dumps(collection, indent=2, sort_keys=True, default=json_serial) + "\n")
+def dump_json_table(f, collection, **kw):
+    f.write(json.dumps(collection, indent=2, default=json_serial, **kw) + "\n")
 
-def dump_json_tables(data, fn):
+def dump_json_tables(data, fn, **kw):
     with open(fn, "w") as f:
         for tableName, table in sorted(data.items()):
             f.write(tableName + ": ")
-            dump_json_table(f, table)
+            dump_json_table(f, table, **kw)

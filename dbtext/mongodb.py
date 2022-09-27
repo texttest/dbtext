@@ -5,7 +5,7 @@ Created on Dec 8, 2021
 '''
 
 import os, subprocess, json, time
-from . import jsonutils
+from . import jsonutils, increments
 from threading import Thread
 import shutil
 import sys
@@ -61,8 +61,9 @@ class MongoTextClient:
         return getattr(self.client, name)
             
     def dump_data_directory(self, rootDir):
+        origDir = rootDir + "_orig"
         if os.path.isdir(rootDir):
-            os.rename(rootDir, rootDir + ".orig")
+            os.rename(rootDir, origDir)
         data = self.parse_mongo()
         for dbName, dbdata in data.items():
             dbdir = os.path.join(rootDir, dbName)
@@ -71,6 +72,7 @@ class MongoTextClient:
                 fn = os.path.join(dbdir, collName + ".json")
                 with open(fn, "w") as f:
                     jsonutils.dump_json_table(f, collection)
+        increments.IncrementConverter().convert_to_increment(rootDir, origDir)
     
     @classmethod
     def parse_data_directory(cls, rootDir, dbMapping):
@@ -200,7 +202,7 @@ class MongoTextClient:
         if len(new_data) > 0:
             for databaseName, database in sorted(new_data.items()):
                 change_fn = fn_template.format(db=databaseName)
-                jsonutils.dump_json_tables(database, change_fn)
+                jsonutils.dump_json_tables(database, change_fn, sort_keys=True)
 
     def dump_changes(self, cmp_data, ext, ignore_dbs=None):
         new_data = self.parse_mongo(ignore_dbs)
