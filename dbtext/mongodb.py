@@ -79,15 +79,18 @@ class MongoTextClient:
         data = {}
         if os.path.isdir(rootDir):
             for dbName in os.listdir(rootDir):
-                dbdata = {}
-                for collectionFn in os.listdir(os.path.join(rootDir, dbName)):
-                    if collectionFn.endswith(".json"):
-                        collectionPath = os.path.join(rootDir, dbName, collectionFn)
-                        docs = json.load(open(collectionPath))
-                        if dbMapping:
-                            cls.apply_mapping(docs, dbMapping)
-                        dbdata[collectionFn[:-5]] = docs
-                data[dbName] = dbdata
+                dbDir = os.path.join(rootDir, dbName)
+                if os.path.isdir(dbDir):
+                    dbdata = {}
+                    for collectionFn in os.listdir(dbDir):
+                        if collectionFn.endswith(".json"):
+                            collectionPath = os.path.join(rootDir, dbName, collectionFn)
+                            docs = json.load(open(collectionPath))
+                            if dbMapping:
+                                cls.apply_mapping(docs, dbMapping)
+                            dbdata[collectionFn[:-5]] = docs
+                    if len(dbdata) > 0:
+                        data[dbName] = dbdata
         return data
     
     @classmethod
