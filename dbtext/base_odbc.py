@@ -466,7 +466,7 @@ class DBText:
 
     def get_table_names(self, ttcxn):
         cursor = ttcxn.cursor()
-        return [ row.table_name for row in cursor.tables(tableType="TABLE") ]
+        return [ row.table_name for row in cursor.tables(tableType="TABLE", catalog=self.database_name) ]
     
     def in_exclude_patterns(self, tn, patterns):
         return any((fnmatch(tn, pattern) for pattern in patterns))
@@ -506,6 +506,7 @@ class DBText:
                 dumpwhole = tablename in dumpwholenames
                 constraint = 'WHERE ' + usemaxcol + ' > ' + maxval if usemaxcol and not dumpwhole else ""
                 blob_patterns = self.get_blob_patterns_for_dump(sut_ext)
+                self.logger.debug(f"dumping table {tablename}")
                 self.dumptable(ttcxn, tablename, constraint, table_fn_pattern, blob_patterns, dumpableBlobs)
                 
     def get_primary_key_columns(self, ttcxn, tableName):
