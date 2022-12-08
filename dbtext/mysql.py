@@ -33,7 +33,7 @@ class MySQL_DBText(DBText):
     def get_driver(cls):
         drivers = []
         for driver in pyodbc.drivers():
-            if driver.startswith("MySQL"):
+            if driver.startswith("MySQL") or driver.startswith("MariaDB"):
                 drivers.append(driver)
 
         if drivers:
