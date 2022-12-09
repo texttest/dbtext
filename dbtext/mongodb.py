@@ -5,8 +5,7 @@ Created on Dec 8, 2021
 '''
 
 import os, subprocess, json, time
-from . import jsonutils, increments
-from threading import Thread
+from . import jsonutils, increments, wait
 import shutil
 import sys
 try:
@@ -15,34 +14,6 @@ try:
 except ModuleNotFoundError:
     pass
 
-class MongoPipeReaderThread(Thread):
-    def __init__(self, proc):
-        Thread.__init__(self)
-        self.proc = proc
-        self.port = None
-        #self.logfile = open("mongodb.txt", "wb")
-        
-    def run(self):
-        while self.proc.poll() is None:
-            line = self.proc.stdout.readline()
-            if self.port is None and b"Waiting for connections" in line:
-                lineDict = json.loads(line.strip())
-                attrDict = lineDict.get("attr", {})
-                port = attrDict.get("port")
-                if port:
-                    self.port = port
-        #    if not self.logfile.closed:
-        #        self.logfile.write(line)
-                
-    def wait_for_port(self):
-        while self.port is None:
-            time.sleep(0.1)
-        return self.port
-    
-    def terminate(self):
-        #self.logfile.close()
-        self.proc.terminate()
-        self.join()
         
 class MongoTextClient:
     ignore_db_names = [ "admin", "config", "local" ]
@@ -230,12 +201,12 @@ class MongoTextClient:
                 collection.insert_many(docs)
 
 class Mongo_DBText:
-    def __init__(self, port=None, dbMapping=None, transactions=True, **kw):
+    def __init__(self, port=None, dbMapping=None, transactions=True, logfile=None, **kw):
         self.port = port
         self.dbdir = os.path.abspath("mongo")
         if not os.path.isdir(self.dbdir):
             os.mkdir(self.dbdir)
-        self.start_mongo(transactions)
+        self.start_mongo(transactions, logfile)
         self.data_dir = os.path.abspath("mongodata")
         self.initial_data = MongoTextClient.parse_data_directory(self.data_dir, dbMapping)
         self.text_client = self.make_text_client(**kw)
@@ -308,7 +279,7 @@ class Mongo_DBText:
         
 class LocalMongo_DBText(Mongo_DBText):
     mongo_exe = None
-    def start_mongo(self, transactions):
+    def start_mongo(self, transactions, logfile):
         if not self.set_mongo_exe():
             raise RuntimeError("Could not find MongoDB, have you installed it?")
 
@@ -319,11 +290,19 @@ class LocalMongo_DBText(Mongo_DBText):
             self.rsId = "rs" + str(os.getpid())
             cmdArgs += [ "--replSet", self.rsId ]
         self.proc = subprocess.Popen(cmdArgs, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        self.pipeThread = MongoPipeReaderThread(self.proc)
+        self.pipeThread = wait.PipeReaderThread(self.proc, "Waiting for connections", logfile)
         self.pipeThread.start()
 
+    def parse_port(self, line):
+        lineDict = json.loads(line.strip())
+        attrDict = lineDict.get("attr", {})
+        port = attrDict.get("port")
+        if port:
+            return port
+
     def make_text_client(self):
-        self.port = self.pipeThread.wait_for_port()
+        port_line = self.pipeThread.wait_for_text()
+        self.port = self.parse_port(port_line)
         if self.rsId:
             self.enable_transactions(self.port, self.rsId)
         return MongoTextClient("localhost", self.port)
