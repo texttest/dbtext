@@ -96,7 +96,7 @@ class MongoTextClient:
         for databaseName in self.client.list_database_names():
             if databaseName.lower() not in self.ignore_db_names:
                 coll = self.client[databaseName].get_collection(collectionName)
-                if coll and coll.count_documents({}) > 0:
+                if coll is not None and coll.count_documents({}) > 0:
                     return True
         return False
                 
@@ -308,7 +308,7 @@ class LocalMongo_DBText(Mongo_DBText):
         return MongoTextClient("localhost", self.port)
         
     def enable_transactions(self, port, rsId):
-        admin_client = MongoTextClient.make_client("mongodb://localhost:" + str(self.port) + "/admin")
+        admin_client = MongoTextClient.make_client("mongodb://localhost:" + str(self.port) + "/admin", directConnection=True)
         config = {'_id': rsId, 'members': [ {'_id': 0, 'host': 'localhost:' + str(port) } ]}
         admin_client.admin.command("replSetInitiate", config)
         admin_client.close()
@@ -329,7 +329,9 @@ class LocalMongo_DBText(Mongo_DBText):
             for root in roots:
                 mongodir = os.path.join(root, "MongoDB")
                 if os.path.isdir(mongodir):
-                    for dirroot, _, files in os.walk(mongodir):
+                    for dirroot, dirs, files in os.walk(mongodir):
+                        # pick newer versions in preference
+                        dirs.sort(reverse=True)
                         if "mongod.exe" in files:
                             return os.path.join(dirroot, "mongod.exe")
         else:
