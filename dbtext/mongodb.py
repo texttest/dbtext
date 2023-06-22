@@ -201,12 +201,12 @@ class MongoTextClient:
                 collection.insert_many(docs)
 
 class Mongo_DBText:
-    def __init__(self, port=None, dbMapping=None, transactions=True, logfile=None, **kw):
+    def __init__(self, port=None, dbMapping=None, transactions=True, logfile=None, bindipall=False, **kw):
         self.port = port
         self.dbdir = os.path.abspath("mongo")
         if not os.path.isdir(self.dbdir):
             os.mkdir(self.dbdir)
-        self.start_mongo(transactions, logfile)
+        self.start_mongo(transactions, logfile, bindipall)
         self.data_dir = os.path.abspath("mongodata")
         self.initial_data = MongoTextClient.parse_data_directory(self.data_dir, dbMapping)
         self.text_client = self.make_text_client(**kw)
@@ -279,7 +279,7 @@ class Mongo_DBText:
         
 class LocalMongo_DBText(Mongo_DBText):
     mongo_exe = None
-    def start_mongo(self, transactions, logfile):
+    def start_mongo(self, transactions, logfile, bindipall):
         if not self.set_mongo_exe():
             raise RuntimeError("Could not find MongoDB, have you installed it?")
 
@@ -289,6 +289,8 @@ class LocalMongo_DBText(Mongo_DBText):
         if transactions:
             self.rsId = "rs" + str(os.getpid())
             cmdArgs += [ "--replSet", self.rsId ]
+        if bindipall:
+            cmdArgs += [ "--bind_ip_all" ]
         self.proc = subprocess.Popen(cmdArgs, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         self.pipeThread = wait.PipeReaderThread(self.proc, "Waiting for connections", logfile)
         self.pipeThread.start()
