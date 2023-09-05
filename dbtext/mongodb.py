@@ -66,12 +66,13 @@ class MongoTextClient:
     
     @classmethod
     def apply_mapping(cls, docs, dbMapping):
-        ix = 0
+        values_found = {}
         for doc in docs:
             for field, value in doc.items():
                 if isinstance(value, str) and value in dbMapping:
+                    ix = values_found.get(value, 0)
                     doc[field] = dbMapping[value][ix]
-                    ix += 1
+                    values_found[value] = ix + 1
     
     def parse_mongo(self, ignoreDbs=None):
         data = {}
