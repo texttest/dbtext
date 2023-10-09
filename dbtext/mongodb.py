@@ -56,10 +56,15 @@ class MongoTextClient:
                     for collectionFn in os.listdir(dbDir):
                         if collectionFn.endswith(".json"):
                             collectionPath = os.path.join(rootDir, dbName, collectionFn)
-                            docs = json.load(open(collectionPath))
-                            if dbMapping:
-                                cls.apply_mapping(docs, dbMapping)
-                            dbdata[collectionFn[:-5]] = docs
+                            try:
+                                docs = json.load(open(collectionPath))                                                                
+                                if dbMapping:
+                                    cls.apply_mapping(docs, dbMapping)
+                                dbdata[collectionFn[:-5]] = docs
+                            except json.decoder.JSONDecodeError as e:
+                                print("WARNING: DbText found invalid json in MongoDB data file at", collectionPath.replace(os.getcwd(), "."), 
+                                      "- file will be ignored. Detailed error follows:", file=sys.stderr)
+                                print(str(e), file=sys.stderr)
                     if len(dbdata) > 0:
                         data[dbName] = dbdata
         return data
