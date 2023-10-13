@@ -27,6 +27,7 @@ class DBText:
     """
     connectionStringTemplate = None
     enforceVersion = None
+    masterDbName = "master"
     def __init__(self, database=None, master_connection=None):
         self.logger = logging.getLogger("dbtext")
         self.database_name = database
@@ -36,7 +37,7 @@ class DBText:
         self.isconnected = False
         self.startrv = ""
         try:
-            self.cnxn = self.master_connection or self.make_connection("master")
+            self.cnxn = self.master_connection or self.make_connection(self.masterDbName)
             self.isconnected = True
         except pyodbc.Error as e:
             self.logger.error(f"Unexpected error opening connection to db {self.database_name}: %s", e)
@@ -118,8 +119,8 @@ class DBText:
                 self.logger.debug(f"Loading data from {tableFile}")
                 self.add_table_data(tableFile, ttcxn)
             except pyodbc.IntegrityError as ex:
-                fk_constraint_string = "FOREIGN KEY constraint"
-                if fk_constraint_string in ex.args[1]:
+                fk_constraint_string = "foreign key constraint"
+                if fk_constraint_string in ex.args[1].lower():
                     self.logger.debug(f"error when loading data for table {tableFile}: {fk_constraint_string}, will retry this table later")
                     failedFiles.append(tableFile)
                 else:
@@ -245,7 +246,7 @@ class DBText:
                 self.logger.debug("Error when inserting data: 'Cannot insert explicit value for identity column'. "
                                   "Will retry with IDENTITY_INSERT")
                 return self.insert_row(ttcxn, table_name, data, identity_insert=True)
-            elif "conflicted with the FOREIGN KEY constraint" in str(e):
+            elif "foreign key constraint" in str(e).lower():
                 raise
             else:
                 from pprint import pformat
