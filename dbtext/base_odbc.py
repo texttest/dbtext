@@ -55,7 +55,7 @@ class DBText:
             attachsql = "CREATE DATABASE " + self.quote(self.database_name) + self.get_create_db_args(**kw) + ";"
             self.query(attachsql)
         except pyodbc.Error as e:
-            self.logger.error(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n", e)
+            self.logger.error(f"Unexpected error for create db {self.database_name}:\n{attachsql}\n%s", e)
             raise
 
     def populate_empty_db(self, sqlfile, tables_dir=None, encoding=None):
@@ -76,7 +76,7 @@ class DBText:
 
                 self.readrv(ttcxn)
         except pyodbc.Error as e:
-            self.logger.error(f"Unexpected error for populate empty db {self.database_name}:\n", e)
+            self.logger.error(f"Unexpected error for populate empty db {self.database_name}:\n%s", e)
             raise
 
     def execute_setup_query(self, ttcxn, currQuery):
@@ -120,7 +120,7 @@ class DBText:
                 self.add_table_data(tableFile, ttcxn)
             except pyodbc.IntegrityError as ex:
                 fk_constraint_string = "foreign key constraint"
-                if fk_constraint_string in ex.args[1].lower():
+                if fk_constraint_string in str(ex).lower():
                     self.logger.debug(f"error when loading data for table {tableFile}: {fk_constraint_string}, will retry this table later")
                     failedFiles.append(tableFile)
                 else:
@@ -219,13 +219,16 @@ class DBText:
                 rows.append(currRowDict)
             return rows
         
-    def add_table_data(self, fn, ttcxn):
-        table_name = os.path.basename(fn).rsplit(".", 1)[0]
-        pkeys = self.get_primary_key_columns(ttcxn, table_name)
+    def add_table_data_for(self, fn, ttcxn, table_name, pkeys):
         rowData = self.parse_table_file_to_rowdicts(fn, pkeys)
         for currRowDict in rowData:
             self.insert_row(ttcxn, table_name, currRowDict)
-          
+
+    def add_table_data(self, fn, ttcxn):
+        table_name = os.path.basename(fn).rsplit(".", 1)[0]
+        pkeys = self.get_primary_key_columns(ttcxn, table_name)
+        self.add_table_data_for(fn, ttcxn, table_name, pkeys)
+    
     def insert_row(self, ttcxn, table_name, data, identity_insert=False):
         if not data:
             return

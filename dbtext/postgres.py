@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 from .base_odbc import DBText
+from datetime import datetime
 try:
     import pyodbc
 except ModuleNotFoundError:
@@ -29,3 +30,14 @@ class Postgres_DBText(DBText):
         cls.connectionStringTemplate = 'DRIVER={' + driver + '};Host=' + host + ';Port=' + port + ';Database=%s;Username=' + user + ';Password=' + password + ';BoolsAsChar=0;'
         return cls.connectionStringTemplate
 
+    def add_table_data_for(self, fn, ttcxn, table_name, pkeys):
+        # Need to reset sequence counters explicitly in Postgres (MS SQL does this automatically behind the scenes)
+        DBText.add_table_data_for(self, fn, ttcxn, table_name, pkeys)
+        for pkey in pkeys:
+            quoted_table = self.quote(table_name)
+            sql = f"select pg_get_serial_sequence('{quoted_table}', '{pkey}');"
+            seq = ttcxn.cursor().execute(sql).fetchall()[0][0]
+            if seq:
+                quoted_pkey = self.quote(pkey)
+                ttcxn.cursor().execute(f"select setval('{seq}', (select MAX({quoted_pkey}) FROM {quoted_table}));")
+                self.logger.debug(f"Primary key has sequence {seq} - resetting its value")
