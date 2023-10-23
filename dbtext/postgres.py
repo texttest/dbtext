@@ -27,7 +27,7 @@ class Postgres_DBText(DBText):
     def set_connection_string_template(cls, server, user, password):
         driver = cls.get_driver()
         host, port = server.split(",")
-        cls.connectionStringTemplate = 'DRIVER={' + driver + '};Host=' + host + ';Port=' + port + ';Database=%s;Username=' + user + ';Password=' + password + ';BoolsAsChar=0;'
+        cls.connectionStringTemplate = 'DRIVER={' + driver + '};Server=' + host + ';Port=' + port + ';Database=%s;Uid=' + user + ';Pwd=' + password + ';BoolsAsChar=0;'
         return cls.connectionStringTemplate
 
     def add_table_data_for(self, fn, ttcxn, table_name, pkeys):
