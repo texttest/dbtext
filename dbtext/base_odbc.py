@@ -225,39 +225,38 @@ class DBText:
         
     def add_table_data_for(self, fn, ttcxn, table_name, pkeys):
         rowData = self.parse_table_file_to_rowdicts(fn, pkeys)
-        for currRowDict in rowData:
-            self.insert_row(ttcxn, table_name, currRowDict)
+        if len(rowData) > 0:
+            self.insert_rows(ttcxn, table_name, rowData)
 
     def add_table_data(self, fn, ttcxn):
         table_name = os.path.basename(fn).rsplit(".", 1)[0]
         pkeys = self.get_primary_key_columns(ttcxn, table_name)
         self.add_table_data_for(fn, ttcxn, table_name, pkeys)
     
-    def insert_row(self, ttcxn, table_name, data, identity_insert=False):
-        if not data:
-            return
-        
-        valueStr = ("?," * len(data))[:-1]
-        keys = ", ".join([ self.quote(k) for k in data.keys() ])
+    def insert_rows(self, ttcxn, table_name, rows, identity_insert=False):
+        sampleRow = rows[0]
+        valueStr = ("?," * len(sampleRow))[:-1]
+        keys = ", ".join([ self.quote(k) for k in sampleRow ])
         quoted_table = self.quote(table_name)
         sql = f"INSERT INTO {quoted_table} ({keys}) VALUES ({valueStr})"
         if identity_insert:
             sql = "SET IDENTITY_INSERT " + quoted_table + " ON; " + sql + "; SET IDENTITY_INSERT " + quoted_table + " OFF"  
-        self.insert_row_data(ttcxn, sql, data, table_name)
+        self.insert_row_data(ttcxn, sql, rows, table_name)
 
-    def insert_row_data(self, ttcxn, sql, data, table_name):
+    def insert_row_data(self, ttcxn, sql, rows, table_name):
         try:
-            ttcxn.cursor().execute(sql, *list(data.values()))
+            rowValues = [tuple(row.values()) for row in rows]
+            ttcxn.cursor().executemany(sql, rowValues)
         except pyodbc.DatabaseError as e:
             if "Cannot insert explicit value for identity column" in str(e):
                 self.logger.debug("Error when inserting data: 'Cannot insert explicit value for identity column'. "
                                   "Will retry with IDENTITY_INSERT")
-                return self.insert_row(ttcxn, table_name, data, identity_insert=True)
+                return self.insert_rows(ttcxn, table_name, rows, identity_insert=True)
             elif "foreign key constraint" in str(e).lower():
                 raise
             else:
                 from pprint import pformat
-                self.logger.error("Failed to insert data into " + table_name + ":\n" + pformat(data) + "\n")
+                self.logger.error("Failed to insert data into " + table_name + ":\n" + pformat(rows) + "\n")
                 raise
 
     def update_start_rv(self):

@@ -38,9 +38,6 @@ class Sqlite3_DBText(DBText):
         cols = [Sqlite3Column(pragma_data) for pragma_data in cursor.fetchall()]
         return cols
 
-    def insert_row_data(self, ttcxn, sql, data, table_name):
-        ttcxn.cursor().execute(sql, list(data.values()))
-
 
 
 
