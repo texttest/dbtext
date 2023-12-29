@@ -112,24 +112,28 @@ class DBText:
         if currQuery.strip():
             self.execute_setup_query(ttcxn, currQuery)
 
-    def read_tables_dir(self, ttcxn, tables_dir_name):
+    def read_table_files(self, ttcxn, tableFiles, final):
         failedFiles = []
-        for tableFile in glob(os.path.join(tables_dir_name, "*.table")) + glob(os.path.join(tables_dir_name, "*.json")):
+        for tableFile in tableFiles:
             try:
                 self.logger.debug(f"Loading data from {tableFile}")
                 self.add_table_data(tableFile, ttcxn)
             except pyodbc.IntegrityError as ex:
                 fk_constraint_string = "foreign key constraint"
-                if fk_constraint_string in str(ex).lower():
+                if not final and fk_constraint_string in str(ex).lower():
                     self.logger.debug(f"error when loading data for table {tableFile}: {fk_constraint_string}, will retry this table later")
                     failedFiles.append(tableFile)
                 else:
                     raise ex
-                
-        # Things often fail due to constraints, insert everything else and then try them again
-        for tableFile in failedFiles:
-            self.logger.debug(f"retrying data insert for table {tableFile}")
-            self.add_table_data(tableFile, ttcxn)
+        return failedFiles
+
+    def read_tables_dir(self, ttcxn, tables_dir_name):
+        tableFiles = glob(os.path.join(tables_dir_name, "*.table")) + glob(os.path.join(tables_dir_name, "*.json"))
+        attempts = 5
+        for attempt in range(attempts):
+            tableFiles = self.read_table_files(ttcxn, tableFiles, attempt == attempts - 1)
+            if len(tableFiles) == 0:
+                return
               
     @classmethod
     def expand_value(cls, value, *args):
