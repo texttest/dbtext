@@ -336,11 +336,14 @@ class DBText:
                 self.maxval[tabname] = notabmax
         ttcnxn.close()
     
+    def convert_from_binary(self, col):
+        return col
+        
     def append_to_sql_query(self, column_tuple):
         column_name, column_type = column_tuple
         quoted_column_name = self.quote(str(column_name))
         if column_type in [ "binary", "timestamp" ]:
-            return "master.sys.fn_varbintohexstr(%s)" % quoted_column_name
+            return self.convert_from_binary(quoted_column_name)
         else:
             return quoted_column_name
 

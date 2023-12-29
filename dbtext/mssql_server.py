@@ -49,7 +49,10 @@ class MSSQL_DBText(DBText):
     def readrv(self, ttcxn):
         rows = ttcxn.cursor().execute('select master.sys.fn_varbintohexstr(@@DBTS) AS maxrv').fetchall()
         self.startrv = rows[0].maxrv
-    
+        
+    def convert_from_binary(self, col):
+        return "master.sys.fn_varbintohexstr(%s)" % col
+
     @classmethod
     def get_driver(cls):
         odbc, legacy = [], []
