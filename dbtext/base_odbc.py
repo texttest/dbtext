@@ -618,9 +618,9 @@ class DBText:
         for col in cols:
             if col.type_name == "timestamp":
                 timestampcol = col.column_name
-                if tablename in include_timestamp_tables:
+                if tablename in include_timestamp_tables or col.column_def is None:
                     colnames.append((col.column_name, col.type_name))
-            if col.type_name != "timestamp":
+            else:
                 colnames.append((col.column_name, col.type_name))
         
         colnames.sort(key=self.getColumnSortKey)
