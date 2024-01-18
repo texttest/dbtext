@@ -8,6 +8,7 @@ import os, subprocess, json, time
 from . import jsonutils, increments, wait
 import shutil
 import sys
+import logging
 try:
     # comes with pymongo
     import bson
@@ -209,14 +210,19 @@ class MongoTextClient:
 class Mongo_DBText:
     def __init__(self, port=None, dbMapping=None, transactions=True, logfile=None, bindipall=False, **kw):
         self.port = port
+        logger = logging.getLogger("Mongo_DBText")
         self.dbdir = os.path.abspath("mongo")
         if not os.path.isdir(self.dbdir):
             os.mkdir(self.dbdir)
         self.start_mongo(transactions, logfile, bindipall)
         self.data_dir = os.path.abspath("mongodata")
+        logger.debug("Parsing data from " + self.data_dir)
         self.initial_data = MongoTextClient.parse_data_directory(self.data_dir, dbMapping)
+        logger.debug("Connecting to instance...")
         self.text_client = self.make_text_client(**kw)
+        logger.debug("Waiting for database to be primary...")
         if self.wait_for_all_primary():
+            logger.debug("Inserting all data")
             self.text_client.insert_data(self.initial_data)
         else:
             print("Database was not primary even after waiting 60 seconds, aborting.", file=sys.stderr)
