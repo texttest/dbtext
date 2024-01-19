@@ -208,14 +208,18 @@ class MongoTextClient:
                 collection.insert_many(docs)
 
 class Mongo_DBText:
-    def __init__(self, port=None, dbMapping=None, transactions=True, logfile=None, bindipall=False, **kw):
+    def __init__(self, port=None, data_dirname="mongodata", db_dirname="mongo"):
         self.port = port
-        logger = logging.getLogger("Mongo_DBText")
-        self.dbdir = os.path.abspath("mongo")
+        self.dbdir = os.path.abspath(db_dirname)
+        self.data_dir = os.path.abspath(data_dirname)
+        self.initial_data = {}
+        self.text_client = None
+            
+    def create(self, dbMapping=None, transactions=True, logfile=None, bindipall=False, **kw):
         if not os.path.isdir(self.dbdir):
             os.mkdir(self.dbdir)
+        logger = logging.getLogger("Mongo_DBText")
         self.start_mongo(transactions, logfile, bindipall)
-        self.data_dir = os.path.abspath("mongodata")
         logger.debug("Parsing data from " + self.data_dir)
         self.initial_data = MongoTextClient.parse_data_directory(self.data_dir, dbMapping)
         logger.debug("Connecting to instance...")
@@ -226,7 +230,6 @@ class Mongo_DBText:
             self.text_client.insert_data(self.initial_data)
         else:
             print("Database was not primary even after waiting 60 seconds, aborting.", file=sys.stderr)
-            self.text_client = None
             
     def __enter__(self):
         return self

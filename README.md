@@ -24,7 +24,8 @@ For MongoDB:
 ```python
     from dbtext import Mongo_DBText
 
-    dbClient = Mongo_DBText(host=connStr) # as in pymongo, "host" can be a full connection string
+    dbClient = Mongo_DBText()
+    dbClient.create(host=connStr) # as in pymongo, "host" can be a full connection string
     dbClient.dump_data_directory("mongodata") # creates a directory called mongodata
 ```
 
@@ -59,7 +60,8 @@ Mongo_DBText is used for connecting to already running instances, for example if
 
 ```python
     import dbtext
-    with dbtext.LocalMongo_DBText(testdbname) as db: # the name you use here will be used for the directory name in the current working directory
+    with dbtext.LocalMongo_DBText(data_dirname=testdbname) as db: # the name you use here will be used for the directory name in the current working directory
+        db.create()
         if not db.setup_succeeded(): # could not start MongoDB, for example
             return False
 
