@@ -69,16 +69,22 @@ class MongoTextClient:
                     if len(dbdata) > 0:
                         data[dbName] = dbdata
         return data
-    
+
+    @classmethod
+    def apply_mapping_to_doc(cls, doc, dbMapping, values_found):
+        for field, value in doc.items():
+            if isinstance(value, str) and value in dbMapping:
+                ix = values_found.get(value, 0)
+                doc[field] = dbMapping[value][ix]
+                values_found[value] = ix + 1
+            elif isinstance(value, dict):
+                cls.apply_mapping_to_doc(value, dbMapping, values_found)
+
     @classmethod
     def apply_mapping(cls, docs, dbMapping):
         values_found = {}
         for doc in docs:
-            for field, value in doc.items():
-                if isinstance(value, str) and value in dbMapping:
-                    ix = values_found.get(value, 0)
-                    doc[field] = dbMapping[value][ix]
-                    values_found[value] = ix + 1
+            cls.apply_mapping_to_doc(doc, dbMapping, values_found)
     
     def parse_mongo(self, ignoreDbs=None):
         data = {}
